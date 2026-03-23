@@ -186,4 +186,70 @@ func TestArchive_HandlesNoRules(t *testing.T) {
 	}
 }
 
+func TestDetect_WithDotClaudeMD(t *testing.T) {
+	dir := t.TempDir()
+
+	// Root CLAUDE.md (legacy)
+	os.WriteFile(filepath.Join(dir, "CLAUDE.md"), []byte("# Legacy Project"), 0644)
+
+	// .claude/CLAUDE.md (project instructions)
+	dotClaudeDir := filepath.Join(dir, ".claude")
+	os.MkdirAll(dotClaudeDir, 0755)
+	os.WriteFile(filepath.Join(dotClaudeDir, "CLAUDE.md"), []byte(`# Project Instructions
+- **Stack**: Remix + Drizzle + PostgreSQL
+github_owner: "MyOrg"
+github_repo: "my-legacy-app"
+`), 0644)
+
+	a := Detect(dir)
+	if !a.IsLegacy {
+		t.Fatal("expected IsLegacy=true")
+	}
+	if a.DotClaudeMD == "" {
+		t.Error("expected DotClaudeMD to be detected")
+	}
+	// Vars from .claude/CLAUDE.md should be extracted
+	if a.ExtractedVars["github_owner"] != "MyOrg" {
+		t.Errorf("expected github_owner 'MyOrg', got %q", a.ExtractedVars["github_owner"])
+	}
+	if a.ExtractedVars["github_repo"] != "my-legacy-app" {
+		t.Errorf("expected github_repo 'my-legacy-app', got %q", a.ExtractedVars["github_repo"])
+	}
+}
+
+func TestArchive_MovesDotClaudeMD(t *testing.T) {
+	dir := t.TempDir()
+
+	os.WriteFile(filepath.Join(dir, "CLAUDE.md"), []byte("# Legacy"), 0644)
+	dotClaudeDir := filepath.Join(dir, ".claude")
+	os.MkdirAll(dotClaudeDir, 0755)
+	dotClaudeMD := filepath.Join(dotClaudeDir, "CLAUDE.md")
+	os.WriteFile(dotClaudeMD, []byte("# Project Instructions"), 0644)
+
+	artifacts := &Artifacts{
+		IsLegacy:    true,
+		ClaudeMD:    filepath.Join(dir, "CLAUDE.md"),
+		DotClaudeMD: dotClaudeMD,
+	}
+
+	archived, err := Archive(dir, artifacts)
+	if err != nil {
+		t.Fatalf("Archive() error: %v", err)
+	}
+	if len(archived) != 2 {
+		t.Errorf("expected 2 archived files, got %d", len(archived))
+	}
+
+	// Original should be gone
+	if _, err := os.Stat(dotClaudeMD); err == nil {
+		t.Error(".claude/CLAUDE.md should have been moved")
+	}
+
+	// Should be in docs/legacy/
+	dest := filepath.Join(dir, "docs", "legacy", ".claude", "CLAUDE.md")
+	if _, err := os.Stat(dest); err != nil {
+		t.Errorf("docs/legacy/.claude/CLAUDE.md should exist: %v", err)
+	}
+}
+
 // parseGitRemote tests are in internal/cli/ package since the function lives there

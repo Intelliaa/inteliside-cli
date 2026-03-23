@@ -113,6 +113,9 @@ func runInit(cmd *cobra.Command, args []string) error {
 	if legacyArtifacts.IsLegacy {
 		fmt.Println("  ⚠ Proyecto legacy detectado:")
 		fmt.Printf("    CLAUDE.md existente (sin marcadores ATL)\n")
+		if legacyArtifacts.DotClaudeMD != "" {
+			fmt.Printf("    .claude/CLAUDE.md existente (instrucciones de proyecto)\n")
+		}
 		if len(legacyArtifacts.RuleFiles) > 0 {
 			fmt.Printf("    .claude/rules/ existente (%d archivos)\n", len(legacyArtifacts.RuleFiles))
 		}
@@ -132,6 +135,9 @@ func runInit(cmd *cobra.Command, args []string) error {
 			var legacyFiles []string
 			if legacyArtifacts.ClaudeMD != "" {
 				legacyFiles = append(legacyFiles, legacyArtifacts.ClaudeMD)
+			}
+			if legacyArtifacts.DotClaudeMD != "" {
+				legacyFiles = append(legacyFiles, legacyArtifacts.DotClaudeMD)
 			}
 			legacyFiles = append(legacyFiles, legacyArtifacts.RuleFiles...)
 			if len(legacyFiles) > 0 {

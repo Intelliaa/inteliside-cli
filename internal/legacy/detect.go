@@ -11,14 +11,16 @@ import (
 
 // Artifacts holds paths to detected legacy files in a project.
 type Artifacts struct {
-	ClaudeMD      string            // path to existing CLAUDE.md
-	ClaudeMDBody  string            // content of existing CLAUDE.md
-	RulesDir      string            // path to existing .claude/rules/
-	RuleFiles     []string          // individual rule file paths
-	DocsDir       string            // path to existing docs/
-	DocsFiles     []string          // files in docs/
-	IsLegacy      bool              // true if CLAUDE.md exists but lacks ATL markers
-	ExtractedVars map[string]string // parsed from legacy CLAUDE.md
+	ClaudeMD       string            // path to existing root CLAUDE.md
+	ClaudeMDBody   string            // content of existing root CLAUDE.md
+	DotClaudeMD    string            // path to existing .claude/CLAUDE.md (project instructions)
+	DotClaudeMDBody string           // content of existing .claude/CLAUDE.md
+	RulesDir       string            // path to existing .claude/rules/
+	RuleFiles      []string          // individual rule file paths
+	DocsDir        string            // path to existing docs/
+	DocsFiles      []string          // files in docs/
+	IsLegacy       bool              // true if CLAUDE.md exists but lacks ATL markers
+	ExtractedVars  map[string]string // parsed from legacy CLAUDE.md
 }
 
 const atlMarker = "<!-- inteliside:atl-config -->"
@@ -48,6 +50,26 @@ func Detect(projectDir string) *Artifacts {
 	a.ClaudeMD = claudeMD
 	a.ClaudeMDBody = content
 
+	// Extract vars from root CLAUDE.md first (base layer)
+	a.ExtractedVars = ExtractVars(content)
+
+	// Check for .claude/CLAUDE.md (project-level instructions)
+	// Vars from here fill gaps not covered by root CLAUDE.md
+	dotClaudeMD := filepath.Join(projectDir, ".claude", "CLAUDE.md")
+	if dcData, err := os.ReadFile(dotClaudeMD); err == nil {
+		dcContent := string(dcData)
+		// Only archive if it doesn't already have ATL markers
+		if !strings.Contains(dcContent, atlMarker) {
+			a.DotClaudeMD = dotClaudeMD
+			a.DotClaudeMDBody = dcContent
+			for k, v := range ExtractVars(dcContent) {
+				if v != "" && a.ExtractedVars[k] == "" {
+					a.ExtractedVars[k] = v
+				}
+			}
+		}
+	}
+
 	// Check for .claude/rules/
 	rulesDir := filepath.Join(projectDir, ".claude", "rules")
 	if entries, err := os.ReadDir(rulesDir); err == nil && len(entries) > 0 {
@@ -67,9 +89,6 @@ func Detect(projectDir string) *Artifacts {
 			a.DocsFiles = append(a.DocsFiles, filepath.Join(docsDir, e.Name()))
 		}
 	}
-
-	// Extract vars from legacy CLAUDE.md
-	a.ExtractedVars = ExtractVars(content)
 
 	return a
 }
@@ -147,6 +166,19 @@ func Archive(projectDir string, artifacts *Artifacts) ([]string, error) {
 			return archived, fmt.Errorf("no se pudo archivar CLAUDE.md: %w", err)
 		}
 		archived = append(archived, dest)
+	}
+
+	// Archive .claude/CLAUDE.md
+	if artifacts.DotClaudeMD != "" {
+		dest := filepath.Join(legacyDir, ".claude", "CLAUDE.md")
+		if err := os.MkdirAll(filepath.Dir(dest), 0755); err != nil {
+			return archived, err
+		}
+		if err := moveFile(artifacts.DotClaudeMD, dest); err != nil {
+			fmt.Printf("  ⚠ No se pudo archivar .claude/CLAUDE.md: %v\n", err)
+		} else {
+			archived = append(archived, dest)
+		}
 	}
 
 	// Archive .claude/rules/
