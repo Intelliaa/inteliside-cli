@@ -1,7 +1,7 @@
-# Binary
-inteliside
-inteliside.exe
-inteliside-*
+# Binary (only root level, not cmd/inteliside/)
+/inteliside
+/inteliside.exe
+/inteliside-*
 
 # Go
 *.test
