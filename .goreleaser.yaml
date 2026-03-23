@@ -47,21 +47,20 @@ changelog:
       - "^test:"
       - "^chore:"
 
-# brews:
-#   - name: inteliside
-#     repository:
-#       owner: Intelliaa
-#       name: homebrew-tap
-#       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
-#     directory: Formula
-#     homepage: "https://github.com/Intelliaa/inteliside-cli"
-#     description: "CLI del Marketplace de Plugins Inteliside para Claude Code"
-#     license: "MIT"
-#     install: |
-#       bin.install "inteliside"
-#     test: |
-#       system "#{bin}/inteliside", "version"
-# TODO: Uncomment after creating HOMEBREW_TAP_TOKEN secret
+brews:
+  - name: inteliside
+    repository:
+      owner: Intelliaa
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    directory: Formula
+    homepage: "https://github.com/Intelliaa/inteliside-cli"
+    description: "CLI del Marketplace de Plugins Inteliside para Claude Code"
+    license: "MIT"
+    install: |
+      bin.install "inteliside"
+    test: |
+      system "#{bin}/inteliside", "version"
 
 release:
   github:

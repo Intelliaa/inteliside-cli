@@ -192,7 +192,20 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "down", "j":
 			if m.state != stateSecrets || !m.secretEditing {
-				m.moveDown()
+				switch m.state {
+				case statePresetSelect:
+					if m.cursor < len(m.presets)-1 {
+						m.cursor++
+					}
+				case statePluginSelect:
+					if m.cursor < len(m.plugins)-1 {
+						m.cursor++
+					}
+				case stateSecrets:
+					if m.cursor < len(m.secretFields)-1 {
+						m.cursor++
+					}
+				}
 			}
 
 		case " ":
