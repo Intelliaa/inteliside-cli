@@ -27,8 +27,8 @@ type templateTarget struct {
 var allTemplates = []templateTarget{
 	{
 		pluginID:    "atl-inteliside",
-		relPath:     "CLAUDE.md",
-		description: "CLAUDE.md raiz (Dev — ATL Inteliside)",
+		relPath:     ".claude/CLAUDE.md",
+		description: ".claude/CLAUDE.md (Dev — ATL Inteliside)",
 		getTemplate: templateATL,
 	},
 	{
@@ -45,8 +45,8 @@ var allTemplates = []templateTarget{
 	},
 	{
 		pluginID:    "n8n-studio",
-		relPath:     "CLAUDE.md",
-		description: "CLAUDE.md raiz (Automation — n8n Studio)",
+		relPath:     ".claude/CLAUDE.md",
+		description: ".claude/CLAUDE.md (Automation — n8n Studio)",
 		getTemplate: templateN8n,
 	},
 	{
@@ -219,20 +219,28 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	// Show plan
-	fmt.Println("  Archivos a crear:")
+	fmt.Println("  Archivos a crear/actualizar:")
 	fmt.Println("  " + strings.Repeat("─", 50))
 	for _, t := range targets {
 		dest := filepath.Join(projectDir, t.relPath)
-		status := "crear"
 		if _, err := os.Stat(dest); err == nil {
-			status = "ya existe — SKIP"
+			if t.relPath == ".claude/CLAUDE.md" {
+				fmt.Printf("    %s (existe — MERGE seccion ATL)\n", t.relPath)
+			} else {
+				fmt.Printf("    %s (ya existe — SKIP)\n", t.relPath)
+			}
+		} else {
+			fmt.Printf("    %s (crear)\n", t.relPath)
 		}
-		fmt.Printf("    %s (%s)\n", t.relPath, status)
 	}
 	if needsRules {
 		rulesDir := filepath.Join(projectDir, ".claude", "rules")
-		if entries, err := os.ReadDir(rulesDir); err == nil && len(entries) > 0 {
-			fmt.Printf("    .claude/rules/ (ya existe — SKIP)\n")
+		existing := listExistingRules(rulesDir)
+		missing := countMissingRules(existing)
+		if missing == 0 && len(existing) > 0 {
+			fmt.Printf("    .claude/rules/ (5 rules ATL presentes)\n")
+		} else if len(existing) > 0 {
+			fmt.Printf("    .claude/rules/ (agregar %d rules ATL faltantes)\n", missing)
 		} else {
 			fmt.Printf("    .claude/rules/ (5 archivos)\n")
 		}
@@ -271,13 +279,9 @@ func runInit(cmd *cobra.Command, args []string) error {
 	// Write templates
 	created := 0
 	skipped := 0
+	merged := 0
 	for _, t := range targets {
 		dest := filepath.Join(projectDir, t.relPath)
-		if _, err := os.Stat(dest); err == nil {
-			fmt.Printf("  → %s ya existe, skipping\n", t.relPath)
-			skipped++
-			continue
-		}
 
 		// Create directory
 		dir := filepath.Dir(dest)
@@ -285,41 +289,66 @@ func runInit(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("no se pudo crear %s: %w", dir, err)
 		}
 
-		content := t.getTemplate(vars)
+		existingData, existsErr := os.ReadFile(dest)
+		fileExists := existsErr == nil
 
-		// Append legacy reference section if this is the root CLAUDE.md and we archived legacy
-		if t.relPath == "CLAUDE.md" && legacyArtifacts.IsLegacy {
-			content += legacyReferenceSection()
+		if fileExists && t.relPath == ".claude/CLAUDE.md" {
+			// MERGE: append ATL section to existing .claude/CLAUDE.md
+			existingContent := string(existingData)
+			if strings.Contains(existingContent, "<!-- inteliside:atl-config -->") {
+				fmt.Printf("  → %s ya tiene seccion ATL, skipping\n", t.relPath)
+				skipped++
+			} else {
+				atlSection := generateATLSection(vars)
+				newContent := existingContent + "\n" + atlSection
+				if legacyArtifacts.IsLegacy {
+					newContent += legacyReferenceSection()
+				}
+				if err := os.WriteFile(dest, []byte(newContent), 0644); err != nil {
+					return fmt.Errorf("no se pudo actualizar %s: %w", t.relPath, err)
+				}
+				fmt.Printf("  ✓ %s (seccion ATL agregada)\n", t.relPath)
+				merged++
+			}
+		} else if fileExists {
+			// Other templates: skip if already exists
+			fmt.Printf("  → %s ya existe, skipping\n", t.relPath)
+			skipped++
+		} else {
+			// File doesn't exist: create from template
+			content := t.getTemplate(vars)
+			if t.relPath == ".claude/CLAUDE.md" && legacyArtifacts.IsLegacy {
+				content += legacyReferenceSection()
+			}
+			if err := os.WriteFile(dest, []byte(content), 0644); err != nil {
+				return fmt.Errorf("no se pudo escribir %s: %w", t.relPath, err)
+			}
+			fmt.Printf("  ✓ %s\n", t.relPath)
+			created++
 		}
-
-		if err := os.WriteFile(dest, []byte(content), 0644); err != nil {
-			return fmt.Errorf("no se pudo escribir %s: %w", t.relPath, err)
-		}
-		fmt.Printf("  ✓ %s\n", t.relPath)
-		created++
 	}
 
-	// Write rules (from embedded real files, not dummies)
+	// Write rules — add missing ATL rules even if directory has other files
 	if needsRules {
 		rulesDir := filepath.Join(projectDir, ".claude", "rules")
-		if entries, err := os.ReadDir(rulesDir); err != nil || len(entries) == 0 {
-			if err := os.MkdirAll(rulesDir, 0755); err != nil {
+		if err := os.MkdirAll(rulesDir, 0755); err != nil {
+			return err
+		}
+		rules, err := embedded.RuleFiles()
+		if err != nil {
+			return fmt.Errorf("error leyendo rules embebidas: %w", err)
+		}
+		for name, content := range rules {
+			dest := filepath.Join(rulesDir, name)
+			if _, err := os.Stat(dest); err == nil {
+				// Rule already exists — skip
+				continue
+			}
+			if err := os.WriteFile(dest, []byte(content), 0644); err != nil {
 				return err
 			}
-			rules, err := embedded.RuleFiles()
-			if err != nil {
-				return fmt.Errorf("error leyendo rules embebidas: %w", err)
-			}
-			for name, content := range rules {
-				if err := os.WriteFile(filepath.Join(rulesDir, name), []byte(content), 0644); err != nil {
-					return err
-				}
-				fmt.Printf("  ✓ .claude/rules/%s\n", name)
-			}
-			created += len(rules)
-		} else {
-			fmt.Println("  → .claude/rules/ ya existe, skipping")
-			skipped++
+			fmt.Printf("  ✓ .claude/rules/%s\n", name)
+			created++
 		}
 	}
 
@@ -349,10 +378,10 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	// Summary
-	fmt.Printf("\n  ✓ Init completado: %d creados, %d skipped\n", created, skipped)
+	fmt.Printf("\n  ✓ Init completado: %d creados, %d mergeados, %d skipped\n", created, merged, skipped)
 
 	// Check for pending TODOs
-	claudeMD := filepath.Join(projectDir, "CLAUDE.md")
+	claudeMD := filepath.Join(projectDir, ".claude", "CLAUDE.md")
 	if data, err := os.ReadFile(claudeMD); err == nil {
 		todoCount := embedded.CountTODOs(string(data))
 		if todoCount > 0 {
@@ -363,6 +392,74 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 	fmt.Println()
 	return nil
+}
+
+// --- ATL section for merging into existing CLAUDE.md ---
+
+func generateATLSection(vars map[string]string) string {
+	engram := getVar(vars, "engram_project", "<!-- TODO: engram_project -->")
+	owner := getVar(vars, "github_owner", "<!-- TODO: github_owner -->")
+	repo := getVar(vars, "github_repo", "<!-- TODO: github_repo -->")
+
+	return fmt.Sprintf(`
+---
+
+<!-- inteliside:atl-config -->
+## ATL Inteliside
+
+Configuracion requerida para el plugin ATL Inteliside. Todos los devs del equipo deben
+tener este archivo con los mismos valores para compartir la memoria de Engram.
+
+`+"`"+`yaml
+engram_project: "%s"
+github_owner: "%s"
+github_repo: "%s"
+`+"`"+`
+
+> **Nota**: ATL Inteliside deriva automaticamente un segundo proyecto Engram para el pipeline:
+> `+"`"+`engram_pipeline = "{engram_project}/atl"`+"`"+`
+>
+> - **engram_project** → conocimiento permanente del equipo (decisiones, patrones, bugs)
+> - **engram_pipeline** → estado efimero del pipeline de implementacion
+<!-- /inteliside:atl-config -->
+
+---
+
+## Rules de ATL Inteliside
+
+- @.claude/rules/engram-protocol.md
+- @.claude/rules/subagent-architecture.md
+- @.claude/rules/atl-workflow.md
+- @.claude/rules/context-monitoring.md
+- @.claude/rules/team-rules.md
+`, engram, owner, repo)
+}
+
+// --- Rule helpers ---
+
+func listExistingRules(rulesDir string) map[string]bool {
+	existing := make(map[string]bool)
+	entries, err := os.ReadDir(rulesDir)
+	if err != nil {
+		return existing
+	}
+	for _, e := range entries {
+		if !e.IsDir() {
+			existing[e.Name()] = true
+		}
+	}
+	return existing
+}
+
+func countMissingRules(existing map[string]bool) int {
+	atlRules := embedded.RuleFileNames()
+	missing := 0
+	for _, name := range atlRules {
+		if !existing[name] {
+			missing++
+		}
+	}
+	return missing
 }
 
 // --- Legacy reference section ---
@@ -592,10 +689,10 @@ func deduplicateRootCLAUDE(targets []templateTarget) []templateTarget {
 	hasATL := false
 	hasN8n := false
 	for _, t := range targets {
-		if t.pluginID == "atl-inteliside" && t.relPath == "CLAUDE.md" {
+		if t.pluginID == "atl-inteliside" && t.relPath == ".claude/CLAUDE.md" {
 			hasATL = true
 		}
-		if t.pluginID == "n8n-studio" && t.relPath == "CLAUDE.md" {
+		if t.pluginID == "n8n-studio" && t.relPath == ".claude/CLAUDE.md" {
 			hasN8n = true
 		}
 	}
@@ -603,7 +700,7 @@ func deduplicateRootCLAUDE(targets []templateTarget) []templateTarget {
 	if hasATL && hasN8n {
 		var filtered []templateTarget
 		for _, t := range targets {
-			if t.pluginID == "n8n-studio" && t.relPath == "CLAUDE.md" {
+			if t.pluginID == "n8n-studio" && t.relPath == ".claude/CLAUDE.md" {
 				continue
 			}
 			filtered = append(filtered, t)

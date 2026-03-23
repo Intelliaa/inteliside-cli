@@ -1,6 +1,6 @@
-# CLAUDE.md — {{project_name}}
+# {{project_name}} — Instrucciones de proyecto
 
-> Configuracion del proyecto para Claude Code y ATL Inteliside.
+> Archivo de configuracion de Claude Code a nivel proyecto (.claude/CLAUDE.md).
 > Completa los valores marcados con `<!-- TODO: -->`.
 
 ---

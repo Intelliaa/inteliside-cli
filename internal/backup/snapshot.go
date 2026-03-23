@@ -134,6 +134,7 @@ func TargetFiles(projectDir string) []string {
 	}
 	if projectDir != "" {
 		files = append(files, filepath.Join(projectDir, "CLAUDE.md"))
+		files = append(files, filepath.Join(projectDir, ".claude", "CLAUDE.md"))
 		// Include docs CLAUDE.md files
 		files = append(files, filepath.Join(projectDir, "docs", "CLAUDE.md"))
 		files = append(files, filepath.Join(projectDir, "docs", "ux-ui", "CLAUDE.md"))

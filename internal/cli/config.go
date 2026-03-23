@@ -41,22 +41,29 @@ var configShowCmd = &cobra.Command{
 		if projectDir == "" {
 			projectDir, _ = os.Getwd()
 		}
-		claudeMD := filepath.Join(projectDir, "CLAUDE.md")
-		if data, err := os.ReadFile(claudeMD); err == nil {
-			if strings.Contains(string(data), "inteliside:atl-config") {
-				fmt.Println("  CLAUDE.md (ATL section):")
-				fmt.Println("  " + strings.Repeat("─", 50))
-				// Extract just the ATL section
-				content := string(data)
-				start := strings.Index(content, "<!-- inteliside:atl-config -->")
-				end := strings.Index(content, "<!-- /inteliside:atl-config -->")
-				if start >= 0 && end >= 0 {
-					section := content[start : end+len("<!-- /inteliside:atl-config -->")]
-					for _, line := range strings.Split(section, "\n") {
-						fmt.Printf("    %s\n", line)
+		// Check both .claude/CLAUDE.md (preferred) and root CLAUDE.md (fallback)
+		claudePaths := []string{
+			filepath.Join(projectDir, ".claude", "CLAUDE.md"),
+			filepath.Join(projectDir, "CLAUDE.md"),
+		}
+		for _, claudeMD := range claudePaths {
+			if data, err := os.ReadFile(claudeMD); err == nil {
+				if strings.Contains(string(data), "inteliside:atl-config") {
+					rel, _ := filepath.Rel(projectDir, claudeMD)
+					fmt.Printf("  %s (ATL section):\n", rel)
+					fmt.Println("  " + strings.Repeat("─", 50))
+					content := string(data)
+					start := strings.Index(content, "<!-- inteliside:atl-config -->")
+					end := strings.Index(content, "<!-- /inteliside:atl-config -->")
+					if start >= 0 && end >= 0 {
+						section := content[start : end+len("<!-- /inteliside:atl-config -->")]
+						for _, line := range strings.Split(section, "\n") {
+							fmt.Printf("    %s\n", line)
+						}
 					}
+					fmt.Println()
+					break // found it, no need to check fallback
 				}
-				fmt.Println()
 			}
 		}
 
@@ -143,15 +150,20 @@ Ejemplos:
 			}
 
 		case "atl-inteliside":
-			claudeMD := filepath.Join(projectDir, "CLAUDE.md")
+			// Try .claude/CLAUDE.md first, then root CLAUDE.md
+			claudeMD := filepath.Join(projectDir, ".claude", "CLAUDE.md")
+			if _, err := os.Stat(claudeMD); err != nil {
+				claudeMD = filepath.Join(projectDir, "CLAUDE.md")
+			}
+			rel, _ := filepath.Rel(projectDir, claudeMD)
 			if dryRun {
-				fmt.Println("  [dry-run] Eliminaría sección ATL de CLAUDE.md")
+				fmt.Printf("  [dry-run] Eliminaría sección ATL de %s\n", rel)
 				fmt.Println("  [dry-run] No eliminaría .claude/rules/ (contiene archivos del usuario)")
 			} else {
 				if err := removeATLSection(claudeMD); err != nil {
-					fmt.Printf("  ⚠ CLAUDE.md: %v\n", err)
+					fmt.Printf("  ⚠ %s: %v\n", rel, err)
 				} else {
-					fmt.Println("  ✓ Eliminada sección ATL de CLAUDE.md")
+					fmt.Printf("  ✓ Eliminada sección ATL de %s\n", rel)
 				}
 				fmt.Println("  ℹ .claude/rules/ no se elimina — puede contener archivos personalizados")
 			}

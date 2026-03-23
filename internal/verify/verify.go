@@ -117,20 +117,30 @@ func checkMCPs() []Check {
 func checkProjectFiles(dir string) []Check {
 	var checks []Check
 
-	claudeMD := filepath.Join(dir, "CLAUDE.md")
-	if _, err := os.Stat(claudeMD); err == nil {
-		data, _ := os.ReadFile(claudeMD)
-		content := string(data)
+	// Check .claude/CLAUDE.md (project-level, preferred)
+	dotClaudeMD := filepath.Join(dir, ".claude", "CLAUDE.md")
+	rootClaudeMD := filepath.Join(dir, "CLAUDE.md")
 
-		if strings.Contains(content, "inteliside:atl-config") {
-			checks = append(checks, Check{"CLAUDE.md (ATL)", "ok", "seccion ATL presente"})
+	claudeMD := dotClaudeMD
+	if _, err := os.Stat(dotClaudeMD); err != nil {
+		claudeMD = rootClaudeMD // fallback to root
+	}
+
+	if data, err := os.ReadFile(claudeMD); err == nil {
+		content := string(data)
+		rel := ".claude/CLAUDE.md"
+		if claudeMD == rootClaudeMD {
+			rel = "CLAUDE.md"
 		}
 
-		// Check for pending TODOs
+		if strings.Contains(content, "inteliside:atl-config") {
+			checks = append(checks, Check{rel + " (ATL)", "ok", "seccion ATL presente"})
+		}
+
 		todoCount := embedded.CountTODOs(content)
 		if todoCount > 0 {
 			checks = append(checks, Check{
-				"CLAUDE.md (TODOs)",
+				rel + " (TODOs)",
 				"warn",
 				fmt.Sprintf("%d valores pendientes de completar", todoCount),
 			})
