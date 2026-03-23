@@ -266,7 +266,7 @@ func mergeFigmaMCP(token string) error {
 	claudeJSON := filepath.Join(home, ".claude.json")
 	return mergeJSONKey(claudeJSON, "mcpServers", "figma-console", map[string]any{
 		"command": "npx",
-		"args":    []any{"-y", "@anthropic-ai/figma-console-mcp"},
+		"args":    []any{"-y", "figma-console-mcp"},
 		"env": map[string]any{
 			"FIGMA_ACCESS_TOKEN": token,
 		},
@@ -312,7 +312,7 @@ func mergeStitchMCP(token string) error {
 	claudeJSON := filepath.Join(home, ".claude.json")
 	return mergeJSONKey(claudeJSON, "mcpServers", "stitch", map[string]any{
 		"command": "npx",
-		"args":    []any{"-y", "@anthropic-ai/stitch-mcp"},
+		"args":    []any{"-y", "stitch-mcp"},
 		"env": map[string]any{
 			"STITCH_API_KEY": token,
 		},
