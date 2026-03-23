@@ -1,7 +1,6 @@
 package deps
 
 import (
-	"strings"
 	"testing"
 )
 
@@ -10,14 +9,13 @@ func TestResolve_SinglePlugin(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	// n8n-studio only needs n8n-mcp + the plugin step
 	if len(steps) < 2 {
 		t.Errorf("expected at least 2 steps, got %d", len(steps))
 	}
-	// Last step should be the plugin
+	// Last step should be marketplace-register
 	last := steps[len(steps)-1]
-	if !strings.HasPrefix(last.ID, "plugin:") {
-		t.Errorf("last step should be a plugin step, got %s", last.ID)
+	if last.ID != "marketplace-register" {
+		t.Errorf("last step should be marketplace-register, got %s", last.ID)
 	}
 }
 
@@ -26,15 +24,15 @@ func TestResolve_DevPreset(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	// Should have deps + 2 plugin steps
-	pluginSteps := 0
+	// Should have deps + 1 marketplace step
+	hasMarketplace := false
 	for _, s := range steps {
-		if strings.HasPrefix(s.ID, "plugin:") {
-			pluginSteps++
+		if s.ID == "marketplace-register" {
+			hasMarketplace = true
 		}
 	}
-	if pluginSteps != 2 {
-		t.Errorf("expected 2 plugin steps, got %d", pluginSteps)
+	if !hasMarketplace {
+		t.Error("expected marketplace-register step")
 	}
 }
 
@@ -45,33 +43,26 @@ func TestResolve_UnknownPlugin(t *testing.T) {
 	}
 }
 
-func TestResolve_DepsBeforePlugins(t *testing.T) {
+func TestResolve_MarketplaceIsLast(t *testing.T) {
 	steps, err := Resolve([]string{"atl-inteliside"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	pluginIdx := -1
-	for i, s := range steps {
-		if s.ID == "plugin:atl-inteliside" {
-			pluginIdx = i
-			break
-		}
-	}
-	if pluginIdx < 0 {
-		t.Fatal("plugin step not found")
+	last := steps[len(steps)-1]
+	if last.ID != "marketplace-register" {
+		t.Errorf("marketplace-register should be last, got %s", last.ID)
 	}
 
-	// All dep steps should come before the plugin step
-	for i, s := range steps[:pluginIdx] {
-		if strings.HasPrefix(s.ID, "plugin:") {
-			t.Errorf("dep step at index %d is a plugin step: %s", i, s.ID)
+	// All other steps should come before marketplace
+	for i, s := range steps[:len(steps)-1] {
+		if s.ID == "marketplace-register" {
+			t.Errorf("marketplace-register at index %d should only be at the end", i)
 		}
 	}
 }
 
 func TestResolve_NoDuplicateDeps(t *testing.T) {
-	// fullstack installs all 6 plugins — deps should be deduplicated
 	steps, err := Resolve([]string{"sdd-wizards", "ux-studio", "atl-inteliside", "sdd-intake", "sdd-legacy", "n8n-studio"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -87,7 +78,6 @@ func TestResolve_NoDuplicateDeps(t *testing.T) {
 }
 
 func TestResolve_TransitiveDeps(t *testing.T) {
-	// gh-repo-scope requires gh-auth requires gh-cli
 	steps, err := Resolve([]string{"sdd-wizards"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

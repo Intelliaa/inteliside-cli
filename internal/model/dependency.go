@@ -25,6 +25,7 @@ type InstallContext struct {
 	Verbose    bool
 	AutoYes    bool
 	Secrets    map[string]string // collected tokens/keys
+	PluginIDs  []string          // plugins being installed
 }
 
 // NewInstallContext creates a new install context with defaults.

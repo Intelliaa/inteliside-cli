@@ -32,6 +32,7 @@ func AllDependencies() []model.Dependency {
 		githubLabels(),
 		claudeRules(),
 		claudeMDTemplate(),
+		marketplaceRegister(),
 	}
 }
 
@@ -486,6 +487,89 @@ func claudeMDTemplate() model.Dependency {
 
 			claudeMD := filepath.Join(ctx.ProjectDir, "CLAUDE.md")
 			return appendATLSection(claudeMD, ctx.Secrets)
+		},
+	}
+}
+
+// --- Marketplace + Plugin Activation ---
+
+const marketplaceName = "marketplace-inteliside"
+const marketplaceRepo = "Intelliaa/marketplace-plugins-inteliside"
+
+func marketplaceRegister() model.Dependency {
+	return model.Dependency{
+		ID:          "marketplace-register",
+		Name:        "Marketplace + Plugins",
+		Description: "Registra el marketplace y activa los plugins seleccionados en Claude Code",
+		Requires:    nil,
+		CheckFn: func() (bool, string, error) {
+			home, _ := os.UserHomeDir()
+			settingsPath := filepath.Join(home, ".claude", "settings.json")
+			data, err := os.ReadFile(settingsPath)
+			if err != nil {
+				return false, "no se pudo leer settings.json", nil
+			}
+			if strings.Contains(string(data), marketplaceName) {
+				return true, "marketplace registrado", nil
+			}
+			return false, "marketplace no registrado", nil
+		},
+		InstallFn: func(ctx *model.InstallContext) error {
+			if ctx.DryRun {
+				fmt.Println("  [dry-run] Registraría marketplace y activaría plugins")
+				return nil
+			}
+
+			home, _ := os.UserHomeDir()
+			settingsPath := filepath.Join(home, ".claude", "settings.json")
+
+			// Read current settings
+			data, _ := os.ReadFile(settingsPath)
+			var settings map[string]any
+			if data != nil {
+				_ = json.Unmarshal(data, &settings)
+			}
+			if settings == nil {
+				settings = make(map[string]any)
+			}
+
+			// Register marketplace
+			marketplaces, ok := settings["extraKnownMarketplaces"].(map[string]any)
+			if !ok {
+				marketplaces = make(map[string]any)
+			}
+			marketplaces[marketplaceName] = map[string]any{
+				"autoUpdate": true,
+				"source": map[string]any{
+					"repo":   marketplaceRepo,
+					"source": "github",
+				},
+			}
+			settings["extraKnownMarketplaces"] = marketplaces
+			fmt.Println("  ✓ Marketplace registrado")
+
+			// Enable plugins from context
+			enabledPlugins, ok := settings["enabledPlugins"].(map[string]any)
+			if !ok {
+				enabledPlugins = make(map[string]any)
+			}
+			for _, pid := range ctx.PluginIDs {
+				key := pid + "@" + marketplaceName
+				if _, exists := enabledPlugins[key]; !exists {
+					enabledPlugins[key] = true
+					fmt.Printf("  ✓ Plugin activado: %s\n", pid)
+				} else {
+					fmt.Printf("  → Plugin ya activo: %s\n", pid)
+				}
+			}
+			settings["enabledPlugins"] = enabledPlugins
+
+			// Write back
+			out, err := json.MarshalIndent(settings, "", "  ")
+			if err != nil {
+				return err
+			}
+			return os.WriteFile(settingsPath, out, 0644)
 		},
 	}
 }

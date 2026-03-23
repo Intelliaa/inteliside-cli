@@ -64,23 +64,20 @@ func Resolve(pluginIDs []string) ([]model.Step, error) {
 		})
 	}
 
-	// Add plugin installation steps
-	for _, pid := range pluginIDs {
-		plugin := catalog.PluginByID(pid)
-		p := *plugin
+	// Register marketplace and activate plugins in Claude Code
+	mktDep := catalog.DependencyByID("marketplace-register")
+	if mktDep != nil {
+		d := *mktDep
 		steps = append(steps, model.Step{
-			ID:          "plugin:" + p.ID,
-			Name:        "Plugin " + p.Name,
-			Description: p.Description,
+			ID:          d.ID,
+			Name:        d.Name,
+			Description: d.Description,
 			Status:      model.StepPending,
-			DependsOn:   p.Deps,
 			Execute: func(ctx *model.InstallContext) error {
-				if ctx.DryRun {
-					fmt.Printf("  [dry-run] Instalaría plugin %s\n", p.Name)
-					return nil
-				}
-				fmt.Printf("  ✓ Plugin %s — dependencias satisfechas, listo para usar\n", p.Name)
-				return nil
+				// Pass plugin IDs to context so the installer knows which to activate
+				ctx.PluginIDs = pluginIDs
+				fmt.Printf("  → Registrando marketplace y activando %d plugins...\n", len(pluginIDs))
+				return d.InstallFn(ctx)
 			},
 		})
 	}

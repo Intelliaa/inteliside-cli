@@ -51,7 +51,7 @@ inteliside version
 
 ### Paso 2 — Configurar tu máquina (una sola vez)
 
-Este paso instala las dependencias globales que los plugins necesitan: servidores MCP, Engram (memoria persistente), y autenticación de GitHub.
+Este paso instala las dependencias globales que los plugins necesitan: servidores MCP, Engram (memoria persistente), autenticación de GitHub, y **activa automáticamente los plugins** en Claude Code.
 
 Se ejecuta **una sola vez** por máquina, no por proyecto.
 
@@ -141,32 +141,7 @@ Si un archivo ya existe, el CLI lo salta — nunca sobreescribe tu trabajo.
 
 ---
 
-### Paso 4 — Instalar los plugins en Claude Code
-
-Abre Claude Code y ejecuta estos comandos para agregar los plugins del marketplace:
-
-```bash
-claude
-```
-
-Dentro de Claude Code:
-
-```
-/plugin marketplace add Intelliaa/marketplace-plugins-inteliside
-```
-
-Luego instala los plugins que necesites según tu rol:
-
-```
-/plugin install sdd-wizards@marketplace-plugins-inteliside
-/plugin install ux-studio@marketplace-plugins-inteliside
-/plugin install atl-inteliside@marketplace-plugins-inteliside
-/plugin install n8n-studio@marketplace-plugins-inteliside
-```
-
----
-
-### Paso 5 — Verificar que todo funciona
+### Paso 4 — Verificar que todo funciona
 
 ```bash
 inteliside doctor
@@ -182,7 +157,7 @@ Verifica que los servidores MCP están conectados y las configuraciones son corr
 
 ---
 
-### Paso 6 — Empezar a trabajar
+### Paso 5 — Empezar a trabajar
 
 Cada rol abre Claude Code desde su directorio:
 
@@ -215,6 +190,7 @@ claude
 brew install Intelliaa/tap/inteliside
 
 # 2. Configurar tu máquina (una sola vez)
+#    Instala dependencias + registra marketplace + activa plugins automáticamente
 inteliside install --preset fullstack
 
 # 3. Crear proyecto
@@ -225,14 +201,6 @@ inteliside init --preset fullstack
 
 # 5. Verificar
 inteliside doctor
-
-# 6. Instalar plugins en Claude Code
-claude
-/plugin marketplace add Intelliaa/marketplace-plugins-inteliside
-/plugin install sdd-wizards@marketplace-plugins-inteliside
-/plugin install ux-studio@marketplace-plugins-inteliside
-/plugin install atl-inteliside@marketplace-plugins-inteliside
-/plugin install n8n-studio@marketplace-plugins-inteliside
 ```
 
 ---
