@@ -1,226 +1,337 @@
 # Inteliside CLI
 
-CLI del [Marketplace de Plugins Inteliside](https://github.com/Intelliaa/marketplace-plugins-inteliside) para Claude Code. Automatiza la instalación y post-configuración de plugins con un solo comando.
+Instalador y configurador del [Marketplace de Plugins Inteliside](https://github.com/Intelliaa/marketplace-plugins-inteliside) para Claude Code.
 
-**Un comando. Cualquier rol. Cualquier plataforma.**
+Automatiza todo el setup que normalmente harías a mano: instalar dependencias, configurar servidores MCP, generar archivos de configuración y preparar tu proyecto para trabajar con los plugins.
 
-## Instalación del CLI
+---
 
-### macOS / Linux
+## Requisitos previos
+
+Antes de instalar el CLI, asegúrate de tener:
+
+- **Claude Code** instalado (`npm install -g @anthropic-ai/claude-code`)
+- **Node.js 18+** instalado ([nodejs.org](https://nodejs.org/))
+- **Git** instalado
+- **GitHub CLI** instalado (`brew install gh` en macOS)
+
+---
+
+## Guía de instalación paso a paso
+
+### Paso 1 — Instalar el CLI
+
+Elige una de estas opciones:
+
+**macOS / Linux (Homebrew — recomendado):**
 
 ```bash
-# Homebrew (recomendado)
 brew install Intelliaa/tap/inteliside
-
-# curl
-curl -fsSL https://raw.githubusercontent.com/Intelliaa/inteliside-cli/main/scripts/install.sh | bash
-
-# Go
-go install github.com/Intelliaa/inteliside-cli/cmd/inteliside@latest
 ```
 
-### Windows
+**macOS / Linux (script):**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Intelliaa/inteliside-cli/main/scripts/install.sh | bash
+```
+
+**Windows:**
 
 ```powershell
 irm https://raw.githubusercontent.com/Intelliaa/inteliside-cli/main/scripts/install.ps1 | iex
 ```
 
-## Flujo de uso
-
-El CLI separa dos momentos: **install** (una vez por máquina) e **init** (una vez por proyecto).
-
-### Paso 1: Instalar dependencias globales
-
-Ejecutar una sola vez en tu máquina. Configura MCP servers, Engram, GitHub auth y todo lo que vive fuera del proyecto.
+Verifica que se instaló correctamente:
 
 ```bash
-# TUI interactiva (recomendado)
+inteliside version
+```
+
+---
+
+### Paso 2 — Configurar tu máquina (una sola vez)
+
+Este paso instala las dependencias globales que los plugins necesitan: servidores MCP, Engram (memoria persistente), y autenticación de GitHub.
+
+Se ejecuta **una sola vez** por máquina, no por proyecto.
+
+**Opción A — TUI interactiva (recomendado para primera vez):**
+
+```bash
 inteliside
+```
 
-# O directo por rol
-inteliside install --preset dev        # Desarrollador
-inteliside install --preset pm         # Product Manager
-inteliside install --preset designer   # Diseñador UI/UX
-inteliside install --preset fullstack  # Todo el equipo
-inteliside install --preset automation # Automatización n8n
+Se abre un menú visual donde seleccionas tu rol y el CLI hace todo automáticamente.
 
-# Plugins específicos
-inteliside install --plugin atl-inteliside,n8n-studio
+**Opción B — Directo por rol:**
 
-# Preview sin cambios
+```bash
+inteliside install --preset dev
+```
+
+Los roles disponibles son:
+
+| Rol | Comando | Qué instala |
+|-----|---------|-------------|
+| Product Manager | `inteliside install --preset pm` | GitHub CLI autenticado |
+| Diseñador UI/UX | `inteliside install --preset designer` | GitHub CLI + Figma Console MCP |
+| Desarrollador | `inteliside install --preset dev` | GitHub CLI + Engram |
+| Todo el equipo | `inteliside install --preset fullstack` | Todo lo anterior + n8n MCP |
+| Automatización | `inteliside install --preset automation` | n8n MCP |
+
+Durante la instalación el CLI te pedirá las API keys necesarias (Figma, etc.). Puedes pegarlas directamente desde el portapapeles.
+
+Para ver qué haría sin ejecutar nada:
+
+```bash
 inteliside install --preset dev --dry-run
 ```
 
-**Qué hace `install` por preset:**
+---
 
-| Preset | Dependencias que configura |
-|--------|---------------------------|
-| `pm` | GitHub CLI auth + scope `repo` |
-| `designer` | GitHub CLI + Figma Console MCP + Google Stitch MCP + tokens |
-| `dev` | GitHub CLI + Engram (binary + plugin de Claude Code) |
-| `fullstack` | Todo lo anterior + n8n MCP |
-| `automation` | n8n MCP server (default compartido de Inteliside) |
-| `legacy` | GitHub CLI + Engram |
+### Paso 3 — Preparar tu proyecto (una vez por proyecto)
 
-### Paso 2: Inicializar cada proyecto
-
-Ejecutar en la raíz de cada repositorio nuevo. Genera los `CLAUDE.md` que cada plugin necesita en la ubicación correcta, más rules y GitHub labels.
+Este paso genera los archivos de configuración que cada plugin necesita **dentro de tu proyecto**: archivos `CLAUDE.md`, reglas del pipeline, labels de GitHub, y servidores MCP específicos del proyecto.
 
 ```bash
 cd mi-proyecto
-
-# Interactivo — pregunta nombre, GitHub owner, Engram project, etc.
 inteliside init --preset dev
-
-# Sin preguntas, usa defaults
-inteliside init --preset fullstack --yes
-
-# Solo un plugin
-inteliside init --plugin ux-studio
-
-# Preview
-inteliside init --preset dev --dry-run
 ```
 
-**Qué genera `init` por preset:**
+El CLI te preguntará datos del proyecto:
 
-| Preset | Archivos generados |
-|--------|-------------------|
-| `pm` | `docs/CLAUDE.md` — espacio de trabajo del PM |
-| `designer` | `docs/CLAUDE.md` + `docs/ux-ui/CLAUDE.md` — PM + Designer |
-| `dev` | `CLAUDE.md` (raíz) + `docs/CLAUDE.md` + `.claude/rules/` (5 archivos) + GitHub labels (9) |
-| `fullstack` | Los 3 CLAUDE.md + `docs/ux-ui/CLAUDE.md` + rules + labels |
-| `automation` | `CLAUDE.md` (raíz) — config n8n Studio |
-| `legacy` | `CLAUDE.md` (raíz) + `docs/CLAUDE.md` + rules + labels |
+- Nombre del proyecto
+- GitHub owner y repositorio
+- Proyecto de Engram (para memoria compartida)
+- URL de Figma (si eres designer)
+- Google Cloud Project ID (si usas Stitch para diseño)
 
-**Ubicación de cada CLAUDE.md:**
+Estos datos se guardan en los archivos generados, no se envían a ningún servidor.
+
+**Archivos que genera según el rol:**
+
+| Rol | Archivos |
+|-----|----------|
+| PM | `docs/CLAUDE.md` |
+| Designer | `docs/CLAUDE.md` + `docs/ux-ui/CLAUDE.md` + `.claude/settings.json` (Stitch MCP) |
+| Dev | `CLAUDE.md` + `docs/CLAUDE.md` + `.claude/rules/` (5 archivos) + GitHub labels |
+| Full Stack | Todos los anteriores combinados |
+| Automation | `CLAUDE.md` (configuración n8n) |
+
+La estructura resultante en tu proyecto:
 
 ```
 mi-proyecto/
-├── CLAUDE.md                    ← ATL Inteliside (Dev) o n8n Studio
-├── docs/
-│   ├── CLAUDE.md                ← SDD-Wizards (PM)
-│   └── ux-ui/
-│       └── CLAUDE.md            ← UX Studio (Designer)
-└── .claude/
-    └── rules/
-        ├── atl-workflow.md      ← Pipeline ATL
-        ├── engram-protocol.md   ← Memoria compartida
-        ├── subagent-architecture.md
-        ├── context-monitoring.md
-        └── team-rules.md
+├── CLAUDE.md                      ← Configuración del Dev
+├── .claude/
+│   ├── settings.json              ← MCP servers del proyecto (Stitch)
+│   └── rules/
+│       ├── atl-workflow.md        ← Fases del pipeline
+│       ├── engram-protocol.md     ← Memoria compartida
+│       ├── subagent-architecture.md
+│       ├── context-monitoring.md
+│       └── team-rules.md
+└── docs/
+    ├── CLAUDE.md                  ← Configuración del PM
+    └── ux-ui/
+        └── CLAUDE.md              ← Configuración del Designer
 ```
 
-Cada rol ejecuta Claude Code desde su directorio para que cargue el CLAUDE.md correcto:
+Si un archivo ya existe, el CLI lo salta — nunca sobreescribe tu trabajo.
+
+---
+
+### Paso 4 — Instalar los plugins en Claude Code
+
+Abre Claude Code y ejecuta estos comandos para agregar los plugins del marketplace:
 
 ```bash
-# PM trabaja desde docs/
-cd docs && claude
+claude
+```
+
+Dentro de Claude Code:
+
+```
+/plugin marketplace add Intelliaa/marketplace-plugins-inteliside
+```
+
+Luego instala los plugins que necesites según tu rol:
+
+```
+/plugin install sdd-wizards@marketplace-plugins-inteliside
+/plugin install ux-studio@marketplace-plugins-inteliside
+/plugin install atl-inteliside@marketplace-plugins-inteliside
+/plugin install n8n-studio@marketplace-plugins-inteliside
+```
+
+---
+
+### Paso 5 — Verificar que todo funciona
+
+```bash
+inteliside doctor
+```
+
+Muestra el estado de cada dependencia. Si algo falta, te dice exactamente cómo arreglarlo.
+
+```bash
+inteliside verify
+```
+
+Verifica que los servidores MCP están conectados y las configuraciones son correctas.
+
+---
+
+### Paso 6 — Empezar a trabajar
+
+Cada rol abre Claude Code desde su directorio:
+
+```bash
+# PM — levantamiento de requerimientos
+cd docs
+claude
 /sdd-wizards:prd-wizard
 
-# Designer trabaja desde docs/ux-ui/
-cd docs/ux-ui && claude
+# Designer — investigación y diseño UI/UX
+cd docs/ux-ui
+claude
 /ux-studio:ux-orchestrator
 
-# Dev trabaja desde la raíz
-cd mi-proyecto && claude
-/atl-inteliside:orchestrador feat-login
-```
-
-`init` es idempotente — nunca sobreescribe archivos existentes. Si un CLAUDE.md ya existe, lo salta.
-
-### Paso 3: Instalar los plugins en Claude Code
-
-Después de `install` + `init`, instala los plugins del marketplace:
-
-```bash
+# Dev — implementación de features
 claude
-/plugin marketplace add Intelliaa/marketplace-plugins-inteliside
-/plugin install sdd-wizards@marketplace-plugins-inteliside
-/plugin install atl-inteliside@marketplace-plugins-inteliside
-/plugin install ux-studio@marketplace-plugins-inteliside
+/atl-inteliside:orchestrador feat-login
+
+# Automation — workflows n8n
+claude
+/n8n-studio:automation-wizard
 ```
 
-## Ejemplo completo: nuevo proyecto fullstack
+---
+
+## Ejemplo completo: proyecto nuevo desde cero
 
 ```bash
-# 1. Instalar deps globales (una sola vez)
+# 1. Instalar CLI (una sola vez)
+brew install Intelliaa/tap/inteliside
+
+# 2. Configurar tu máquina (una sola vez)
 inteliside install --preset fullstack
 
-# 2. Crear proyecto
+# 3. Crear proyecto
 mkdir mi-app && cd mi-app && git init
 
-# 3. Inicializar estructura
+# 4. Preparar el proyecto
 inteliside init --preset fullstack
-# → Pregunta: nombre del proyecto, GitHub owner/repo, Engram project, Figma URL
 
-# 4. Verificar que todo está OK
+# 5. Verificar
 inteliside doctor
-inteliside verify
 
-# 5. Instalar plugins en Claude Code
+# 6. Instalar plugins en Claude Code
 claude
 /plugin marketplace add Intelliaa/marketplace-plugins-inteliside
 /plugin install sdd-wizards@marketplace-plugins-inteliside
 /plugin install ux-studio@marketplace-plugins-inteliside
 /plugin install atl-inteliside@marketplace-plugins-inteliside
-
-# 6. Trabajar
-cd docs && claude                    # PM: /sdd-wizards:prd-wizard
-cd docs/ux-ui && claude              # Designer: /ux-studio:ux-orchestrator
-cd mi-app && claude                  # Dev: /atl-inteliside:orchestrador feat-login
+/plugin install n8n-studio@marketplace-plugins-inteliside
 ```
 
-## Todos los comandos
+---
 
-| Comando | Tipo | Descripción |
-|---------|------|-------------|
-| `inteliside` | Global | TUI interactiva guiada |
-| `inteliside install --preset <rol>` | Global | Instala deps globales (MCP servers, Engram, gh) |
-| `inteliside init --preset <rol>` | Proyecto | Genera CLAUDE.md, rules y labels en el proyecto |
-| `inteliside setup <plugin>` | Global | Re-configura un plugin individual |
-| `inteliside doctor` | Global | Diagnostica dependencias con fixes sugeridos |
-| `inteliside verify` | Global | Health check de MCP servers y deps |
-| `inteliside sync` | Global | Verifica actualizaciones del marketplace |
-| `inteliside list` | Info | Lista plugins y presets disponibles |
-| `inteliside config show` | Info | Muestra configuración actual |
-| `inteliside config reset <plugin>` | Global | Elimina config de un plugin |
-| `inteliside backup list` | Info | Lista backups disponibles |
-| `inteliside backup restore <id>` | Global | Restaura desde un backup |
-| `inteliside version` | Info | Versión del CLI |
+## Referencia de comandos
 
-## Presets por rol
+### Instalación y configuración
 
-| Preset | Plugins incluidos |
-|--------|-------------------|
-| `pm` | SDD-Wizards |
-| `designer` | UX Studio, SDD-Wizards |
-| `dev` | ATL Inteliside, SDD-Wizards |
-| `fullstack` | Los 6 plugins |
-| `automation` | n8n Studio |
-| `legacy` | SDD-Legacy, ATL Inteliside |
-| `custom` | Selección manual en TUI |
+| Comando | Descripción |
+|---------|-------------|
+| `inteliside` | Abre la interfaz interactiva guiada |
+| `inteliside install --preset <rol>` | Instala dependencias globales según el rol |
+| `inteliside install --plugin <nombre>` | Instala dependencias de plugins específicos |
+| `inteliside init --preset <rol>` | Prepara un proyecto con archivos de configuración |
+| `inteliside init --plugin <nombre>` | Prepara un proyecto para plugins específicos |
+
+### Diagnóstico y mantenimiento
+
+| Comando | Descripción |
+|---------|-------------|
+| `inteliside doctor` | Revisa dependencias y sugiere cómo arreglar problemas |
+| `inteliside verify` | Verifica que MCP servers y configuraciones funcionan |
+| `inteliside sync` | Busca actualizaciones del marketplace |
+| `inteliside setup <plugin>` | Re-configura un plugin individual |
+
+### Información
+
+| Comando | Descripción |
+|---------|-------------|
+| `inteliside list` | Muestra plugins y roles disponibles |
+| `inteliside version` | Muestra la versión instalada |
+| `inteliside config show` | Muestra la configuración actual |
+
+### Backup y recuperación
+
+| Comando | Descripción |
+|---------|-------------|
+| `inteliside backup list` | Lista los backups disponibles |
+| `inteliside backup restore <id>` | Restaura configuración desde un backup |
+| `inteliside config reset <plugin>` | Elimina la configuración de un plugin |
+
+### Banderas disponibles
+
+Estas banderas funcionan con `install` e `init`:
+
+| Bandera | Descripción |
+|---------|-------------|
+| `--preset <rol>` | Selecciona rol: `pm`, `designer`, `dev`, `fullstack`, `automation`, `legacy` |
+| `--plugin <nombre>` | Selecciona plugins específicos separados por coma |
+| `--dry-run` | Muestra qué haría sin ejecutar nada |
+| `--yes` o `-y` | Acepta todos los valores por defecto sin preguntar |
+| `--verbose` o `-v` | Muestra información detallada |
+| `--project-dir <ruta>` | Especifica el directorio del proyecto (default: directorio actual) |
+
+---
+
+## Roles y plugins
+
+| Rol | Preset | Plugins incluidos |
+|-----|--------|-------------------|
+| Product Manager | `pm` | SDD-Wizards |
+| Diseñador UI/UX | `designer` | UX Studio, SDD-Wizards |
+| Desarrollador | `dev` | ATL Inteliside, SDD-Wizards |
+| Todo el equipo | `fullstack` | Los 6 plugins |
+| Automatización | `automation` | n8n Studio |
+| Legacy onboarding | `legacy` | SDD-Legacy, ATL Inteliside |
+| Personalizado | `custom` | Selección manual en la TUI |
+
+---
 
 ## Seguridad
 
-- **Backup automático** antes de cada operación (`~/.inteliside/backups/`)
-- **`--dry-run`** en todos los comandos para preview sin cambios
-- **Additive-only merge** — nunca sobreescribe configuración existente del usuario
-- **Idempotente** — ejecutar dos veces no duplica ni rompe nada
-- **Tokens** se almacenan solo donde Claude Code los espera (settings.json)
-- **Restauración** con `inteliside backup restore <id>`
+- Se crea un **backup automático** antes de cada operación
+- `--dry-run` permite ver los cambios antes de aplicarlos
+- Nunca se sobreescriben archivos existentes del usuario
+- Las API keys se guardan solo donde Claude Code las necesita
+- Los backups se pueden restaurar con `inteliside backup restore <id>`
+
+---
+
+## Actualizar el CLI
+
+```bash
+brew upgrade inteliside
+```
+
+---
 
 ## Desarrollo
 
 ```bash
 git clone https://github.com/Intelliaa/inteliside-cli.git
 cd inteliside-cli
-
-go build ./cmd/inteliside/    # Build
-go test ./...                 # Tests (22 unit tests)
-go vet ./...                  # Linting
-./inteliside                  # Run
+go build ./cmd/inteliside/
+go test ./...
+./inteliside
 ```
+
+---
 
 ## Licencia
 
