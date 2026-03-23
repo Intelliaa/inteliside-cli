@@ -27,6 +27,7 @@ func AllDependencies() []model.Dependency {
 		engramBinary(),
 		engramPlugin(),
 		figmaMCP(),
+		stitchMCP(),
 		n8nMCP(),
 		githubLabels(),
 		claudeRules(),
@@ -267,6 +268,52 @@ func mergeFigmaMCP(token string) error {
 		"args":    []any{"-y", "@anthropic-ai/figma-console-mcp"},
 		"env": map[string]any{
 			"FIGMA_ACCESS_TOKEN": token,
+		},
+	})
+}
+
+// --- Google Stitch MCP ---
+
+func stitchMCP() model.Dependency {
+	return model.Dependency{
+		ID:          "stitch-mcp",
+		Name:        "Google Stitch MCP",
+		Description: "MCP server para generar diseños UI desde prompts (Google Stitch)",
+		Requires:    []string{"node-runtime"},
+		CheckFn: func() (bool, string, error) {
+			home, _ := os.UserHomeDir()
+			settingsPath := filepath.Join(home, ".claude", "settings.json")
+			data, err := os.ReadFile(settingsPath)
+			if err != nil {
+				return false, "no se pudo leer settings.json", nil
+			}
+			if strings.Contains(string(data), "stitch") {
+				return true, "stitch MCP configurado", nil
+			}
+			return false, "stitch MCP no configurado", nil
+		},
+		InstallFn: func(ctx *model.InstallContext) error {
+			if ctx.DryRun {
+				fmt.Println("  [dry-run] Configuraría Google Stitch MCP en settings.json")
+				return nil
+			}
+			token := ctx.Secrets["stitch_api_key"]
+			if token == "" {
+				return fmt.Errorf("se requiere STITCH_API_KEY. Obtén una en https://stitch.google.com/")
+			}
+			return mergeStitchMCP(token)
+		},
+	}
+}
+
+func mergeStitchMCP(token string) error {
+	home, _ := os.UserHomeDir()
+	settingsPath := filepath.Join(home, ".claude", "settings.json")
+	return mergeJSONKey(settingsPath, "mcpServers", "stitch", map[string]any{
+		"command": "npx",
+		"args":    []any{"-y", "@anthropic-ai/stitch-mcp"},
+		"env": map[string]any{
+			"STITCH_API_KEY": token,
 		},
 	})
 }

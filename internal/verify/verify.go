@@ -95,11 +95,14 @@ func checkMCPs() []Check {
 	var checks []Check
 	home, _ := os.UserHomeDir()
 
-	// Check settings.json for figma-console
+	// Check settings.json for figma-console and stitch
 	settings, err := os.ReadFile(filepath.Join(home, ".claude", "settings.json"))
 	if err == nil {
 		if strings.Contains(string(settings), "figma-console") {
 			checks = append(checks, Check{"Figma Console MCP", "ok", "configurado"})
+		}
+		if strings.Contains(string(settings), "stitch") {
+			checks = append(checks, Check{"Google Stitch MCP", "ok", "configurado"})
 		}
 	}
 

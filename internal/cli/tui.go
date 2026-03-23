@@ -406,6 +406,7 @@ func (m tuiModel) resolveAndReview() tuiModel {
 func (m tuiModel) collectSecretFields() []secretField {
 	var fields []secretField
 	needsFigma := false
+	needsStitch := false
 	needsN8n := false
 	needsEngram := false
 
@@ -416,6 +417,7 @@ func (m tuiModel) collectSecretFields() []secretField {
 		switch id {
 		case "ux-studio":
 			needsFigma = true
+			needsStitch = true
 		case "n8n-studio":
 			needsN8n = true
 		case "atl-inteliside", "sdd-intake", "sdd-legacy":
@@ -423,8 +425,21 @@ func (m tuiModel) collectSecretFields() []secretField {
 		}
 	}
 
+	if needsStitch {
+		ok, _, _ := catalog.DependencyByID("stitch-mcp").CheckFn()
+		if !ok {
+			fields = append(fields, secretField{
+				key:        "stitch_api_key",
+				label:      "Google Stitch API Key",
+				hint:       "Obtén una en https://stitch.google.com/",
+				masked:     true,
+				required:   true,
+				forPlugins: []string{"ux-studio"},
+			})
+		}
+	}
+
 	if needsFigma {
-		// Check if already configured
 		ok, _, _ := catalog.DependencyByID("figma-mcp").CheckFn()
 		if !ok {
 			fields = append(fields, secretField{

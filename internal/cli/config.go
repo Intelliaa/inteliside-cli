@@ -119,12 +119,16 @@ Ejemplos:
 		case "ux-studio":
 			path := filepath.Join(home, ".claude", "settings.json")
 			if dryRun {
-				fmt.Println("  [dry-run] Eliminaría 'figma-console' de", path)
+				fmt.Println("  [dry-run] Eliminaría 'figma-console' y 'stitch' de", path)
 			} else {
 				if err := removeJSONKey(path, "mcpServers", "figma-console"); err != nil {
 					return err
 				}
 				fmt.Println("  ✓ Eliminado figma-console de settings.json")
+				if err := removeJSONKey(path, "mcpServers", "stitch"); err != nil {
+					return err
+				}
+				fmt.Println("  ✓ Eliminado stitch de settings.json")
 			}
 
 		case "n8n-studio":

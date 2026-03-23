@@ -158,6 +158,17 @@ func runDiagnosis() []diagnosis {
 		results = append(results, diagnosis{"Figma Console MCP", ok, detail, fix})
 	}
 
+	// Google Stitch MCP
+	stitchDep := catalog.DependencyByID("stitch-mcp")
+	if stitchDep != nil {
+		ok, detail, _ := stitchDep.CheckFn()
+		fix := ""
+		if !ok {
+			fix = "inteliside install --plugin ux-studio"
+		}
+		results = append(results, diagnosis{"Google Stitch MCP", ok, detail, fix})
+	}
+
 	// n8n MCP
 	n8nDep := catalog.DependencyByID("n8n-mcp")
 	if n8nDep != nil {
