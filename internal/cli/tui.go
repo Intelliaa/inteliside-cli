@@ -348,27 +348,25 @@ func (m tuiModel) handleEnter() (tea.Model, tea.Cmd) {
 }
 
 func (m tuiModel) updateSecretInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	key := msg.String()
 	idx := m.cursor
 
-	switch key {
-	case "enter":
+	switch msg.Type {
+	case tea.KeyEnter:
 		m.secretEditing = false
 		m.secrets[m.secretFields[idx].key] = m.secretFields[idx].value
-		// Move to next field or to confirm
 		if idx < len(m.secretFields)-1 {
 			m.cursor++
 		}
 		return m, nil
-	case "esc":
+	case tea.KeyEscape:
 		m.secretEditing = false
 		return m, nil
-	case "backspace":
+	case tea.KeyBackspace:
 		if len(m.secretFields[idx].value) > 0 {
 			m.secretFields[idx].value = m.secretFields[idx].value[:len(m.secretFields[idx].value)-1]
 		}
 		return m, nil
-	case "tab":
+	case tea.KeyTab:
 		m.secretEditing = false
 		m.secrets[m.secretFields[idx].key] = m.secretFields[idx].value
 		if idx < len(m.secretFields)-1 {
@@ -376,10 +374,11 @@ func (m tuiModel) updateSecretInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.secretEditing = true
 		}
 		return m, nil
+	case tea.KeyRunes:
+		// Handles both single keystrokes AND paste (multi-character)
+		m.secretFields[idx].value += string(msg.Runes)
+		return m, nil
 	default:
-		if len(key) == 1 {
-			m.secretFields[idx].value += key
-		}
 		return m, nil
 	}
 }
@@ -473,32 +472,9 @@ func (m tuiModel) collectSecretFields() []secretField {
 		})
 	}
 
-	if needsEngram {
-		fields = append(fields, secretField{
-			key:        "engram_project",
-			label:      "Nombre del proyecto Engram",
-			hint:       "Ej: mi-proyecto-dev",
-			masked:     false,
-			required:   false,
-			forPlugins: []string{"atl-inteliside"},
-		})
-		fields = append(fields, secretField{
-			key:        "github_owner",
-			label:      "GitHub owner (org o usuario)",
-			hint:       "Ej: Intelliaa",
-			masked:     false,
-			required:   false,
-			forPlugins: []string{"atl-inteliside"},
-		})
-		fields = append(fields, secretField{
-			key:        "github_repo",
-			label:      "GitHub repo name",
-			hint:       "Ej: mi-proyecto",
-			masked:     false,
-			required:   false,
-			forPlugins: []string{"atl-inteliside"},
-		})
-	}
+	// Note: engram_project, github_owner, github_repo are per-project vars.
+	// They are collected by 'inteliside init', not here in global install.
+	_ = needsEngram
 
 	return fields
 }
