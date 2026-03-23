@@ -1,0 +1,26 @@
+# Binary
+inteliside
+inteliside.exe
+inteliside-*
+
+# Go
+*.test
+*.out
+vendor/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# GoReleaser
+dist/
+
+# Environment
+.env
+.env.local

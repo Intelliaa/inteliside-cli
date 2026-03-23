@@ -1,0 +1,72 @@
+version: 2
+
+project_name: inteliside
+
+before:
+  hooks:
+    - go mod tidy
+    - go generate ./...
+
+builds:
+  - id: inteliside
+    main: ./cmd/inteliside
+    binary: inteliside
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X github.com/Intelliaa/inteliside-cli/internal/cli.version={{.Version}}
+
+archives:
+  - id: default
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+      - LICENSE*
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+
+brews:
+  - name: inteliside
+    repository:
+      owner: Intelliaa
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    directory: Formula
+    homepage: "https://github.com/Intelliaa/inteliside-cli"
+    description: "CLI del Marketplace de Plugins Inteliside para Claude Code"
+    license: "MIT"
+    install: |
+      bin.install "inteliside"
+    test: |
+      system "#{bin}/inteliside", "version"
+
+release:
+  github:
+    owner: Intelliaa
+    name: inteliside-cli
+  draft: false
+  prerelease: auto
+  name_template: "v{{.Version}}"
