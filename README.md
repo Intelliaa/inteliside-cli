@@ -283,8 +283,26 @@ Estas banderas funcionan con `install` e `init`:
 
 ## Actualizar el CLI
 
+Cuando haya una nueva versión disponible:
+
 ```bash
-brew upgrade inteliside
+brew update && brew upgrade inteliside
+```
+
+Verifica la versión instalada:
+
+```bash
+inteliside version
+```
+
+Si instalaste con curl o Go en lugar de Homebrew:
+
+```bash
+# curl — vuelve a ejecutar el script de instalación
+curl -fsSL https://raw.githubusercontent.com/Intelliaa/inteliside-cli/main/scripts/install.sh | bash
+
+# Go
+go install github.com/Intelliaa/inteliside-cli/cmd/inteliside@latest
 ```
 
 ---
