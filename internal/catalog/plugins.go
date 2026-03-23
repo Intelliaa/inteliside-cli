@@ -24,7 +24,7 @@ func AllPlugins() []model.Plugin {
 			Name:        "ATL Inteliside",
 			Description: "Motor de ejecución de features con 5 subagentes, TDD y verificación automática.",
 			Role:        model.RoleDev,
-			Deps:        []string{"gh-cli", "gh-auth", "gh-repo-scope", "engram-binary", "engram-plugin", "github-labels", "claude-rules", "claude-md-template"},
+			Deps:        []string{"gh-cli", "gh-auth", "gh-repo-scope", "engram-binary", "engram-plugin"},
 		},
 		{
 			ID:          "sdd-intake",
