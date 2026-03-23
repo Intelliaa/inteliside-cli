@@ -17,7 +17,7 @@ func AllPlugins() []model.Plugin {
 			Name:        "UX Studio",
 			Description: "Pipeline de diseño UI/UX. Genera diseños via Stitch, importa a Figma y refina.",
 			Role:        model.RoleDesigner,
-			Deps:        []string{"gh-cli", "gh-auth", "gh-repo-scope", "node-runtime", "figma-mcp", "stitch-mcp"},
+			Deps:        []string{"gh-cli", "gh-auth", "gh-repo-scope", "node-runtime", "figma-mcp"},
 		},
 		{
 			ID:          "atl-inteliside",

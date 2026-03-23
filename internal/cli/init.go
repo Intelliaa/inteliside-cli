@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"os"
 	osexec "os/exec"
@@ -133,6 +134,15 @@ func runInit(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Check for Stitch MCP (per-project)
+	needsStitch := false
+	for _, pid := range pluginIDs {
+		if pid == "ux-studio" {
+			needsStitch = true
+			break
+		}
+	}
+
 	// Show plan
 	fmt.Println("  Archivos a crear:")
 	fmt.Println("  " + strings.Repeat("─", 50))
@@ -151,6 +161,9 @@ func runInit(cmd *cobra.Command, args []string) error {
 		} else {
 			fmt.Printf("    .claude/rules/ (5 archivos)\n")
 		}
+	}
+	if needsStitch {
+		fmt.Printf("    .claude/settings.json (Stitch MCP per-project)\n")
 	}
 	if needsLabels {
 		fmt.Printf("    GitHub labels (9 labels ATL)\n")
@@ -220,6 +233,20 @@ func runInit(cmd *cobra.Command, args []string) error {
 		} else {
 			fmt.Println("  → .claude/rules/ ya existe, skipping")
 			skipped++
+		}
+	}
+
+	// Configure Stitch MCP at project level
+	if needsStitch {
+		settingsPath := filepath.Join(projectDir, ".claude", "settings.json")
+		gcpProject := vars["gcp_project"]
+		stitchKey := vars["stitch_api_key"]
+
+		if err := writeProjectStitchMCP(settingsPath, stitchKey, gcpProject); err != nil {
+			fmt.Printf("  ⚠ Stitch MCP: %v\n", err)
+		} else {
+			fmt.Println("  ✓ .claude/settings.json (Stitch MCP configurado)")
+			created++
 		}
 	}
 
@@ -306,6 +333,7 @@ func collectProjectVars(pluginIDs []string) map[string]string {
 	needsGH := false
 	needsEngram := false
 	needsFigma := false
+	needsStitch := false
 	needsN8n := false
 
 	for _, pid := range pluginIDs {
@@ -314,6 +342,7 @@ func collectProjectVars(pluginIDs []string) map[string]string {
 			needsGH = true
 		case "ux-studio":
 			needsFigma = true
+			needsStitch = true
 		case "n8n-studio":
 			needsN8n = true
 		}
@@ -339,6 +368,11 @@ func collectProjectVars(pluginIDs []string) map[string]string {
 
 	if needsFigma {
 		vars["figma_file"] = promptVar(reader, "  URL del archivo Figma", "")
+	}
+
+	if needsStitch {
+		vars["gcp_project"] = promptVar(reader, "  Google Cloud Project ID (para Stitch)", "")
+		vars["stitch_api_key"] = promptVar(reader, "  Stitch API Key (Enter si ya está en global)", "")
 	}
 
 	if needsN8n {
@@ -706,6 +740,49 @@ automation-specs/
 
 *Generado con inteliside init — Marketplace Inteliside*
 `, name, engram, devURL, prodURL)
+}
+
+func writeProjectStitchMCP(settingsPath, stitchKey, gcpProject string) error {
+	if gcpProject == "" {
+		return fmt.Errorf("GOOGLE_CLOUD_PROJECT es requerido para Stitch MCP")
+	}
+
+	dir := filepath.Dir(settingsPath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+
+	// Read existing project settings
+	existing := make(map[string]any)
+	data, err := os.ReadFile(settingsPath)
+	if err == nil {
+		_ = json.Unmarshal(data, &existing)
+	}
+
+	// Build stitch MCP config
+	env := map[string]any{
+		"GOOGLE_CLOUD_PROJECT": gcpProject,
+	}
+	if stitchKey != "" {
+		env["STITCH_API_KEY"] = stitchKey
+	}
+
+	mcpServers, ok := existing["mcpServers"].(map[string]any)
+	if !ok {
+		mcpServers = make(map[string]any)
+	}
+	mcpServers["stitch"] = map[string]any{
+		"command": "npx",
+		"args":    []any{"-y", "stitch-mcp"},
+		"env":     env,
+	}
+	existing["mcpServers"] = mcpServers
+
+	out, err := json.MarshalIndent(existing, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(settingsPath, out, 0644)
 }
 
 func getVar(vars map[string]string, key, fallback string) string {
