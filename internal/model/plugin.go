@@ -17,4 +17,5 @@ const (
 	RoleDesigner   Role = "designer"
 	RoleDev        Role = "dev"
 	RoleAutomation Role = "automation"
+	RoleSales      Role = "sales"
 )

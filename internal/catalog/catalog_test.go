@@ -4,10 +4,10 @@ import (
 	"testing"
 )
 
-func TestAllPlugins_Returns6(t *testing.T) {
+func TestAllPlugins_Returns7(t *testing.T) {
 	plugins := AllPlugins()
-	if len(plugins) != 6 {
-		t.Errorf("expected 6 plugins, got %d", len(plugins))
+	if len(plugins) != 7 {
+		t.Errorf("expected 7 plugins, got %d", len(plugins))
 	}
 }
 
@@ -28,10 +28,10 @@ func TestPluginByID_NotFound(t *testing.T) {
 	}
 }
 
-func TestAllPresets_Returns7(t *testing.T) {
+func TestAllPresets_Returns8(t *testing.T) {
 	presets := AllPresets()
-	if len(presets) != 7 {
-		t.Errorf("expected 7 presets, got %d", len(presets))
+	if len(presets) != 8 {
+		t.Errorf("expected 8 presets, got %d", len(presets))
 	}
 }
 
@@ -63,8 +63,8 @@ func TestPresetByID_FullstackHasAll(t *testing.T) {
 	if p == nil {
 		t.Fatal("expected to find fullstack preset")
 	}
-	if len(p.PluginIDs) != 6 {
-		t.Errorf("fullstack preset should have 6 plugins, got %d", len(p.PluginIDs))
+	if len(p.PluginIDs) != 7 {
+		t.Errorf("fullstack preset should have 7 plugins, got %d", len(p.PluginIDs))
 	}
 }
 

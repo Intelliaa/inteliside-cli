@@ -26,8 +26,8 @@ func AllPresets() []model.Preset {
 		{
 			ID:          "fullstack",
 			Name:        "Full Stack",
-			Description: "Todo el equipo — los 6 plugins del marketplace",
-			PluginIDs:   []string{"sdd-wizards", "ux-studio", "atl-inteliside", "sdd-intake", "sdd-legacy", "n8n-studio"},
+			Description: "Todo el equipo — los 7 plugins del marketplace",
+			PluginIDs:   []string{"sdd-wizards", "ux-studio", "atl-inteliside", "sdd-intake", "sdd-legacy", "n8n-studio", "sales-engine"},
 		},
 		{
 			ID:          "automation",
@@ -40,6 +40,12 @@ func AllPresets() []model.Preset {
 			Name:        "Legacy",
 			Description: "Legacy onboarding + desarrollo",
 			PluginIDs:   []string{"sdd-legacy", "atl-inteliside"},
+		},
+		{
+			ID:          "sales",
+			Name:        "Sales",
+			Description: "Ventas B2B — prospección, outreach y cierre",
+			PluginIDs:   []string{"sales-engine"},
 		},
 		{
 			ID:          "custom",

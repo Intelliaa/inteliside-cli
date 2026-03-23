@@ -47,6 +47,13 @@ func AllPlugins() []model.Plugin {
 			Role:        model.RoleAutomation,
 			Deps:        []string{"n8n-mcp"},
 		},
+		{
+			ID:          "sales-engine",
+			Name:        "Sales Engine",
+			Description: "Motor de ventas B2B automatizado. Coach diario, research, outreach, propuestas y métricas.",
+			Role:        model.RoleSales,
+			Deps:        []string{"engram-binary", "engram-plugin"},
+		},
 	}
 }
 
