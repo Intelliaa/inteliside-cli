@@ -95,21 +95,17 @@ func checkMCPs() []Check {
 	var checks []Check
 	home, _ := os.UserHomeDir()
 
-	// Check settings.json for figma-console and stitch
-	settings, err := os.ReadFile(filepath.Join(home, ".claude", "settings.json"))
-	if err == nil {
-		if strings.Contains(string(settings), "figma-console") {
-			checks = append(checks, Check{"Figma Console MCP", "ok", "configurado"})
-		}
-		if strings.Contains(string(settings), "stitch") {
-			checks = append(checks, Check{"Google Stitch MCP", "ok", "configurado"})
-		}
-	}
-
-	// Check ~/.claude.json for n8n-mcp
+	// All MCP servers live in ~/.claude.json
 	claudeJSON, err := os.ReadFile(filepath.Join(home, ".claude.json"))
 	if err == nil {
-		if strings.Contains(string(claudeJSON), "n8n-mcp") {
+		content := string(claudeJSON)
+		if strings.Contains(content, "figma-console") {
+			checks = append(checks, Check{"Figma Console MCP", "ok", "configurado"})
+		}
+		if strings.Contains(content, "stitch") {
+			checks = append(checks, Check{"Google Stitch MCP", "ok", "configurado"})
+		}
+		if strings.Contains(content, "n8n-mcp") {
 			checks = append(checks, Check{"n8n MCP", "ok", "configurado"})
 		}
 	}

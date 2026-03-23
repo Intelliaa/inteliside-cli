@@ -117,18 +117,18 @@ Ejemplos:
 
 		switch pluginID {
 		case "ux-studio":
-			path := filepath.Join(home, ".claude", "settings.json")
+			path := filepath.Join(home, ".claude.json")
 			if dryRun {
 				fmt.Println("  [dry-run] Eliminaría 'figma-console' y 'stitch' de", path)
 			} else {
 				if err := removeJSONKey(path, "mcpServers", "figma-console"); err != nil {
 					return err
 				}
-				fmt.Println("  ✓ Eliminado figma-console de settings.json")
+				fmt.Println("  ✓ Eliminado figma-console de ~/.claude.json")
 				if err := removeJSONKey(path, "mcpServers", "stitch"); err != nil {
 					return err
 				}
-				fmt.Println("  ✓ Eliminado stitch de settings.json")
+				fmt.Println("  ✓ Eliminado stitch de ~/.claude.json")
 			}
 
 		case "n8n-studio":

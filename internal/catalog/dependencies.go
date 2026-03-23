@@ -236,10 +236,11 @@ func figmaMCP() model.Dependency {
 		Requires:    []string{"node-runtime"},
 		CheckFn: func() (bool, string, error) {
 			home, _ := os.UserHomeDir()
-			settingsPath := filepath.Join(home, ".claude", "settings.json")
-			data, err := os.ReadFile(settingsPath)
+			// Claude Code reads MCP servers from ~/.claude.json, NOT ~/.claude/settings.json
+			claudeJSON := filepath.Join(home, ".claude.json")
+			data, err := os.ReadFile(claudeJSON)
 			if err != nil {
-				return false, "no se pudo leer settings.json", nil
+				return false, "no se pudo leer ~/.claude.json", nil
 			}
 			if strings.Contains(string(data), "figma-console") {
 				return true, "figma-console MCP configurado", nil
@@ -248,7 +249,7 @@ func figmaMCP() model.Dependency {
 		},
 		InstallFn: func(ctx *model.InstallContext) error {
 			if ctx.DryRun {
-				fmt.Println("  [dry-run] Configuraría Figma Console MCP en settings.json")
+				fmt.Println("  [dry-run] Configuraría Figma Console MCP en ~/.claude.json")
 				return nil
 			}
 			token := ctx.Secrets["figma_token"]
@@ -262,8 +263,8 @@ func figmaMCP() model.Dependency {
 
 func mergeFigmaMCP(token string) error {
 	home, _ := os.UserHomeDir()
-	settingsPath := filepath.Join(home, ".claude", "settings.json")
-	return mergeJSONKey(settingsPath, "mcpServers", "figma-console", map[string]any{
+	claudeJSON := filepath.Join(home, ".claude.json")
+	return mergeJSONKey(claudeJSON, "mcpServers", "figma-console", map[string]any{
 		"command": "npx",
 		"args":    []any{"-y", "@anthropic-ai/figma-console-mcp"},
 		"env": map[string]any{
@@ -282,10 +283,10 @@ func stitchMCP() model.Dependency {
 		Requires:    []string{"node-runtime"},
 		CheckFn: func() (bool, string, error) {
 			home, _ := os.UserHomeDir()
-			settingsPath := filepath.Join(home, ".claude", "settings.json")
-			data, err := os.ReadFile(settingsPath)
+			claudeJSON := filepath.Join(home, ".claude.json")
+			data, err := os.ReadFile(claudeJSON)
 			if err != nil {
-				return false, "no se pudo leer settings.json", nil
+				return false, "no se pudo leer ~/.claude.json", nil
 			}
 			if strings.Contains(string(data), "stitch") {
 				return true, "stitch MCP configurado", nil
@@ -294,7 +295,7 @@ func stitchMCP() model.Dependency {
 		},
 		InstallFn: func(ctx *model.InstallContext) error {
 			if ctx.DryRun {
-				fmt.Println("  [dry-run] Configuraría Google Stitch MCP en settings.json")
+				fmt.Println("  [dry-run] Configuraría Google Stitch MCP en ~/.claude.json")
 				return nil
 			}
 			token := ctx.Secrets["stitch_api_key"]
@@ -308,8 +309,8 @@ func stitchMCP() model.Dependency {
 
 func mergeStitchMCP(token string) error {
 	home, _ := os.UserHomeDir()
-	settingsPath := filepath.Join(home, ".claude", "settings.json")
-	return mergeJSONKey(settingsPath, "mcpServers", "stitch", map[string]any{
+	claudeJSON := filepath.Join(home, ".claude.json")
+	return mergeJSONKey(claudeJSON, "mcpServers", "stitch", map[string]any{
 		"command": "npx",
 		"args":    []any{"-y", "@anthropic-ai/stitch-mcp"},
 		"env": map[string]any{
