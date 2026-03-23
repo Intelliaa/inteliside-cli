@@ -133,14 +133,20 @@ func TargetFiles(projectDir string) []string {
 		filepath.Join(home, ".claude.json"),
 	}
 	if projectDir != "" {
-		files = append(files,
-			filepath.Join(projectDir, "CLAUDE.md"),
-			filepath.Join(projectDir, ".claude", "rules", "atl-workflow.md"),
-			filepath.Join(projectDir, ".claude", "rules", "engram-protocol.md"),
-			filepath.Join(projectDir, ".claude", "rules", "subagent-architecture.md"),
-			filepath.Join(projectDir, ".claude", "rules", "context-monitoring.md"),
-			filepath.Join(projectDir, ".claude", "rules", "team-rules.md"),
-		)
+		files = append(files, filepath.Join(projectDir, "CLAUDE.md"))
+		// Include docs CLAUDE.md files
+		files = append(files, filepath.Join(projectDir, "docs", "CLAUDE.md"))
+		files = append(files, filepath.Join(projectDir, "docs", "ux-ui", "CLAUDE.md"))
+		files = append(files, filepath.Join(projectDir, "docs", "legacy", "CLAUDE.md"))
+		// Include rule files from .claude/rules/
+		rulesDir := filepath.Join(projectDir, ".claude", "rules")
+		if entries, err := os.ReadDir(rulesDir); err == nil {
+			for _, e := range entries {
+				if !e.IsDir() {
+					files = append(files, filepath.Join(rulesDir, e.Name()))
+				}
+			}
+		}
 	}
 	return files
 }

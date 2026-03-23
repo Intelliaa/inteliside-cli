@@ -20,12 +20,13 @@ type InstallFunc func(ctx *InstallContext) error
 
 // InstallContext holds state shared across installation steps.
 type InstallContext struct {
-	ProjectDir string
-	DryRun     bool
-	Verbose    bool
-	AutoYes    bool
-	Secrets    map[string]string // collected tokens/keys
-	PluginIDs  []string          // plugins being installed
+	ProjectDir    string
+	ProjectOrigin string            // "new", "legacy", "existing"
+	DryRun        bool
+	Verbose       bool
+	AutoYes       bool
+	Secrets       map[string]string // collected tokens/keys
+	PluginIDs     []string          // plugins being installed
 }
 
 // NewInstallContext creates a new install context with defaults.

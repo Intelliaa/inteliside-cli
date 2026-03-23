@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/Intelliaa/inteliside-cli/internal/embedded"
 	"github.com/Intelliaa/inteliside-cli/internal/system"
 )
 
@@ -119,14 +120,36 @@ func checkProjectFiles(dir string) []Check {
 	claudeMD := filepath.Join(dir, "CLAUDE.md")
 	if _, err := os.Stat(claudeMD); err == nil {
 		data, _ := os.ReadFile(claudeMD)
-		if strings.Contains(string(data), "inteliside:atl-config") {
-			checks = append(checks, Check{"CLAUDE.md (ATL)", "ok", "sección ATL presente"})
+		content := string(data)
+
+		if strings.Contains(content, "inteliside:atl-config") {
+			checks = append(checks, Check{"CLAUDE.md (ATL)", "ok", "seccion ATL presente"})
+		}
+
+		// Check for pending TODOs
+		todoCount := embedded.CountTODOs(content)
+		if todoCount > 0 {
+			checks = append(checks, Check{
+				"CLAUDE.md (TODOs)",
+				"warn",
+				fmt.Sprintf("%d valores pendientes de completar", todoCount),
+			})
 		}
 	}
 
 	rulesDir := filepath.Join(dir, ".claude", "rules")
 	if entries, err := os.ReadDir(rulesDir); err == nil && len(entries) > 0 {
 		checks = append(checks, Check{".claude/rules/", "ok", fmt.Sprintf("%d archivos", len(entries))})
+	}
+
+	// Check for legacy artifacts
+	legacyDir := filepath.Join(dir, "docs", "legacy")
+	if _, err := os.Stat(legacyDir); err == nil {
+		checks = append(checks, Check{
+			"docs/legacy/",
+			"ok",
+			"artefactos legacy archivados (referencia)",
+		})
 	}
 
 	return checks

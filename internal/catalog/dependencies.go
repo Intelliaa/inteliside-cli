@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/Intelliaa/inteliside-cli/internal/embedded"
 	"github.com/Intelliaa/inteliside-cli/internal/model"
 	"github.com/Intelliaa/inteliside-cli/internal/system"
 )
@@ -447,7 +448,10 @@ func claudeRules() model.Dependency {
 				return fmt.Errorf("no se pudo crear %s: %w", rulesDir, err)
 			}
 
-			rules := getRuleFiles()
+			rules, err := embedded.RuleFiles()
+			if err != nil {
+				return fmt.Errorf("error leyendo rules embebidas: %w", err)
+			}
 			for name, content := range rules {
 				dest := filepath.Join(rulesDir, name)
 				if _, err := os.Stat(dest); err == nil {
@@ -671,54 +675,12 @@ Los archivos en .claude/rules/ definen el flujo ATL:
 	return os.WriteFile(path, []byte(content), 0644)
 }
 
+// getRuleFiles is deprecated — use embedded.RuleFiles() instead.
+// Kept as fallback only.
 func getRuleFiles() map[string]string {
-	return map[string]string{
-		"atl-workflow.md": `# ATL Workflow
-
-Este proyecto usa ATL Inteliside para ejecución de features.
-El flujo es: from-github → init → explore → propose → spec+design → tasks → write-tests → apply → verify → archive.
-
-Reglas:
-- Nunca saltarse fases del pipeline
-- Cada fase produce artefactos que la siguiente consume
-- El orquestador coordina todo el flujo
-`,
-		"engram-protocol.md": `# Engram Protocol
-
-Memoria persistente compartida entre agentes.
-
-Reglas:
-- Guardar decisiones de arquitectura en Engram inmediatamente
-- Buscar contexto en Engram antes de proponer cambios
-- Dos proyectos: equipo (permanente) y pipeline (efímero)
-`,
-		"subagent-architecture.md": `# Subagent Architecture
-
-Cada subagente opera en aislamiento (context: fork).
-
-Reglas:
-- Analyst y Architect son read-only (no modifican código)
-- Test Writer genera tests SIN ver implementación
-- Builder es el único que modifica código fuente
-- Verifier es read-only y cierra issues/milestones
-`,
-		"context-monitoring.md": `# Context Monitoring
-
-Gestión del tamaño de contexto durante el pipeline.
-
-Reglas:
-- Monitorear uso de contexto entre fases
-- Si el contexto supera 70%, resumir y continuar en nuevo fork
-- Artefactos grandes van a archivos, no inline
-`,
-		"team-rules.md": `# Team Rules
-
-Reglas de colaboración entre agentes del equipo ATL.
-
-Reglas:
-- El orquestador es la única fuente de verdad del estado
-- Los subagentes no se comunican entre sí directamente
-- La comunicación es via artefactos (archivos) y Engram
-`,
+	rules, err := embedded.RuleFiles()
+	if err != nil {
+		return nil
 	}
+	return rules
 }

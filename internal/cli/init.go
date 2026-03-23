@@ -11,6 +11,8 @@ import (
 
 	"github.com/Intelliaa/inteliside-cli/internal/backup"
 	"github.com/Intelliaa/inteliside-cli/internal/catalog"
+	"github.com/Intelliaa/inteliside-cli/internal/embedded"
+	"github.com/Intelliaa/inteliside-cli/internal/legacy"
 	"github.com/spf13/cobra"
 )
 
@@ -26,7 +28,7 @@ var allTemplates = []templateTarget{
 	{
 		pluginID:    "atl-inteliside",
 		relPath:     "CLAUDE.md",
-		description: "CLAUDE.md raíz (Dev — ATL Inteliside)",
+		description: "CLAUDE.md raiz (Dev — ATL Inteliside)",
 		getTemplate: templateATL,
 	},
 	{
@@ -44,8 +46,14 @@ var allTemplates = []templateTarget{
 	{
 		pluginID:    "n8n-studio",
 		relPath:     "CLAUDE.md",
-		description: "CLAUDE.md raíz (Automation — n8n Studio)",
+		description: "CLAUDE.md raiz (Automation — n8n Studio)",
 		getTemplate: templateN8n,
+	},
+	{
+		pluginID:    "sdd-legacy",
+		relPath:     "docs/legacy/CLAUDE.md",
+		description: "docs/legacy/CLAUDE.md (Contexto Legacy — SDD-Legacy)",
+		getTemplate: templateLegacy,
 	},
 }
 
@@ -53,14 +61,18 @@ var initCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Inicializa un proyecto con los CLAUDE.md y rules de cada plugin",
 	Long: `Configura un proyecto nuevo copiando los CLAUDE.md de ejemplo a su
-ubicación correcta y creando las rules necesarias.
+ubicacion correcta y creando las rules necesarias.
+
+Si detecta artefactos legacy (CLAUDE.md sin marcadores ATL), los archiva
+automaticamente en docs/legacy/ y genera la configuracion nueva.
 
 Este comando es per-project — ejecutarlo en cada repositorio nuevo.
 Para setup global (MCP servers, Engram), usar 'inteliside install'.
 
 Ejemplos:
   cd mi-proyecto
-  inteliside init --preset dev         # CLAUDE.md raíz + docs/ + rules
+  inteliside init --preset dev         # CLAUDE.md raiz + docs/ + rules
+  inteliside init --preset legacy      # Archiva legacy + genera ATL
   inteliside init --preset designer    # docs/CLAUDE.md + docs/ux-ui/CLAUDE.md
   inteliside init --preset fullstack   # Todo
   inteliside init --plugin ux-studio   # Solo docs/ux-ui/CLAUDE.md
@@ -70,7 +82,7 @@ Ejemplos:
 
 func init() {
 	initCmd.Flags().String("preset", "", "Preset por rol: pm, designer, dev, fullstack, automation, legacy")
-	initCmd.Flags().String("plugin", "", "Plugins específicos separados por coma")
+	initCmd.Flags().String("plugin", "", "Plugins especificos separados por coma")
 	initCmd.Flags().Bool("dry-run", false, "Mostrar plan sin ejecutar")
 	initCmd.Flags().BoolP("yes", "y", false, "No preguntar valores, usar defaults")
 	rootCmd.AddCommand(initCmd)
@@ -96,10 +108,67 @@ func runInit(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Collect variables from user
-	vars := make(map[string]string)
+	// --- Legacy detection ---
+	legacyArtifacts := legacy.Detect(projectDir)
+	if legacyArtifacts.IsLegacy {
+		fmt.Println("  ⚠ Proyecto legacy detectado:")
+		fmt.Printf("    CLAUDE.md existente (sin marcadores ATL)\n")
+		if len(legacyArtifacts.RuleFiles) > 0 {
+			fmt.Printf("    .claude/rules/ existente (%d archivos)\n", len(legacyArtifacts.RuleFiles))
+		}
+		if len(legacyArtifacts.DocsFiles) > 0 {
+			fmt.Printf("    docs/ existente (%d archivos)\n", len(legacyArtifacts.DocsFiles))
+		}
+		fmt.Println()
+		fmt.Println("  Los artefactos legacy se archivaran en docs/legacy/")
+		fmt.Println("  y se generara la configuracion nueva para ATL.")
+		fmt.Println()
+
+		if dryRun {
+			fmt.Println("  [dry-run] Se archivarian los artefactos legacy en docs/legacy/")
+			fmt.Println()
+		} else {
+			// Backup before archiving
+			var legacyFiles []string
+			if legacyArtifacts.ClaudeMD != "" {
+				legacyFiles = append(legacyFiles, legacyArtifacts.ClaudeMD)
+			}
+			legacyFiles = append(legacyFiles, legacyArtifacts.RuleFiles...)
+			if len(legacyFiles) > 0 {
+				snap, _ := backup.Create(legacyFiles)
+				if snap != nil {
+					fmt.Printf("  ✓ Backup de legacy: %s\n", snap.ID)
+				}
+			}
+
+			// Archive
+			archived, err := legacy.Archive(projectDir, legacyArtifacts)
+			if err != nil {
+				return fmt.Errorf("error archivando legacy: %w", err)
+			}
+			for _, a := range archived {
+				rel, _ := filepath.Rel(projectDir, a)
+				fmt.Printf("  ✓ Archivado: %s\n", rel)
+			}
+			fmt.Println()
+		}
+	}
+
+	// Collect variables — auto-detect first, then prompt if interactive
+	vars := detectProjectVars(projectDir)
+
+	// Merge extracted legacy vars (these take precedence over auto-detected)
+	if legacyArtifacts.IsLegacy {
+		for k, v := range legacyArtifacts.ExtractedVars {
+			if v != "" {
+				vars[k] = v
+			}
+		}
+	}
+
+	// Interactive prompt if not --yes
 	if !autoYes {
-		vars = collectProjectVars(pluginIDs)
+		vars = collectProjectVars(pluginIDs, vars)
 	}
 
 	// Determine which templates to apply
@@ -168,6 +237,9 @@ func runInit(cmd *cobra.Command, args []string) error {
 	if needsLabels {
 		fmt.Printf("    GitHub labels (9 labels ATL)\n")
 	}
+	if legacyArtifacts.IsLegacy {
+		fmt.Printf("    CLAUDE.md raiz incluira seccion de referencia legacy\n")
+	}
 	fmt.Println()
 
 	if dryRun {
@@ -208,6 +280,12 @@ func runInit(cmd *cobra.Command, args []string) error {
 		}
 
 		content := t.getTemplate(vars)
+
+		// Append legacy reference section if this is the root CLAUDE.md and we archived legacy
+		if t.relPath == "CLAUDE.md" && legacyArtifacts.IsLegacy {
+			content += legacyReferenceSection()
+		}
+
 		if err := os.WriteFile(dest, []byte(content), 0644); err != nil {
 			return fmt.Errorf("no se pudo escribir %s: %w", t.relPath, err)
 		}
@@ -215,14 +293,17 @@ func runInit(cmd *cobra.Command, args []string) error {
 		created++
 	}
 
-	// Write rules
+	// Write rules (from embedded real files, not dummies)
 	if needsRules {
 		rulesDir := filepath.Join(projectDir, ".claude", "rules")
 		if entries, err := os.ReadDir(rulesDir); err != nil || len(entries) == 0 {
 			if err := os.MkdirAll(rulesDir, 0755); err != nil {
 				return err
 			}
-			rules := getRuleFilesForInit()
+			rules, err := embedded.RuleFiles()
+			if err != nil {
+				return fmt.Errorf("error leyendo rules embebidas: %w", err)
+			}
 			for name, content := range rules {
 				if err := os.WriteFile(filepath.Join(rulesDir, name), []byte(content), 0644); err != nil {
 					return err
@@ -250,27 +331,79 @@ func runInit(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Create labels
+	// Create labels (with validation)
 	if needsLabels {
-		fmt.Println("  Creando GitHub labels...")
-		dep := catalog.DependencyByID("github-labels")
-		if dep != nil {
-			ctx := &labelContext{projectDir: projectDir}
-			_ = createLabelsFromInit(ctx)
+		if ok, reason := canCreateLabels(projectDir); ok {
+			fmt.Println("  Creando GitHub labels...")
+			createLabelsFromInit(projectDir)
+		} else {
+			fmt.Printf("  ⚠ Labels: saltando — %s\n", reason)
+			fmt.Println("    Ejecuta 'inteliside setup atl-inteliside' despues de configurar el remote")
 		}
 	}
 
+	// Summary
 	fmt.Printf("\n  ✓ Init completado: %d creados, %d skipped\n", created, skipped)
-	fmt.Println("\n  Siguiente: completa los valores entre corchetes en cada CLAUDE.md")
+
+	// Check for pending TODOs
+	claudeMD := filepath.Join(projectDir, "CLAUDE.md")
+	if data, err := os.ReadFile(claudeMD); err == nil {
+		todoCount := embedded.CountTODOs(string(data))
+		if todoCount > 0 {
+			fmt.Printf("\n  ℹ %d valores pendientes de completar en CLAUDE.md\n", todoCount)
+			fmt.Println("    Busca '<!-- TODO:' y reemplaza con los valores reales")
+		}
+	}
+
 	fmt.Println()
 	return nil
 }
 
-type labelContext struct {
-	projectDir string
+// --- Legacy reference section ---
+
+func legacyReferenceSection() string {
+	return `
+
+---
+
+## Documentacion Legacy
+
+Este proyecto fue migrado desde una configuracion legacy. La documentacion original
+se encuentra en ` + "`docs/legacy/`" + ` para referencia:
+
+- ` + "`docs/legacy/CLAUDE.md`" + ` — Configuracion original del proyecto
+- ` + "`docs/legacy/.claude/rules/`" + ` — Rules originales (si existian)
+- ` + "`docs/legacy/docs/`" + ` — Documentos originales del directorio docs/
+
+> **Antes de implementar una feature nueva**: consultar docs/legacy/ para
+> reglas de negocio existentes y convenciones del codebase original.
+`
 }
 
-func createLabelsFromInit(ctx *labelContext) error {
+// --- Label validation (Solution 7) ---
+
+func canCreateLabels(projectDir string) (bool, string) {
+	// Check 1: Is this a git repo?
+	if _, err := os.Stat(filepath.Join(projectDir, ".git")); os.IsNotExist(err) {
+		return false, "no es un repositorio git"
+	}
+
+	// Check 2: Has remote configured?
+	out, err := osexec.Command("git", "-C", projectDir, "remote", "get-url", "origin").CombinedOutput()
+	if err != nil || strings.TrimSpace(string(out)) == "" {
+		return false, "no hay remote 'origin' configurado"
+	}
+
+	// Check 3: gh authenticated?
+	_, err = osexec.Command("gh", "auth", "status").CombinedOutput()
+	if err != nil {
+		return false, "gh CLI no esta autenticado"
+	}
+
+	return true, ""
+}
+
+func createLabelsFromInit(projectDir string) {
 	labels := []struct{ name, color, desc string }{
 		{"atl-task", "0075ca", "Task created by ATL pipeline"},
 		{"area:backend", "e4e669", "Backend area"},
@@ -284,24 +417,146 @@ func createLabelsFromInit(ctx *labelContext) error {
 	}
 
 	for _, l := range labels {
-		out, err := runCmdOutput("gh", "label", "create", l.name,
+		out, err := osexec.Command("gh", "label", "create", l.name,
 			"--color", l.color,
 			"--description", l.desc,
 			"--force",
-		)
+		).CombinedOutput()
 		if err != nil {
-			fmt.Printf("    ⚠ Label '%s': %s\n", l.name, out)
+			fmt.Printf("    ⚠ Label '%s': %s\n", l.name, strings.TrimSpace(string(out)))
 		} else {
 			fmt.Printf("    ✓ Label '%s'\n", l.name)
 		}
 	}
-	return nil
 }
 
-func runCmdOutput(name string, args ...string) (string, error) {
-	out, err := osexec.Command(name, args...).CombinedOutput()
-	return strings.TrimSpace(string(out)), err
+// --- Variable detection and collection (Solution 4) ---
+
+func detectProjectVars(projectDir string) map[string]string {
+	vars := make(map[string]string)
+
+	// project_name from directory name
+	vars["project_name"] = filepath.Base(projectDir)
+
+	// github_owner and github_repo from git remote
+	if out, err := osexec.Command("git", "-C", projectDir, "remote", "get-url", "origin").CombinedOutput(); err == nil {
+		owner, repo := parseGitRemote(strings.TrimSpace(string(out)))
+		if owner != "" {
+			vars["github_owner"] = owner
+		}
+		if repo != "" {
+			vars["github_repo"] = repo
+		}
+	}
+
+	// engram_project derived from project_name
+	vars["engram_project"] = vars["project_name"] + "-dev"
+
+	return vars
 }
+
+func parseGitRemote(remote string) (owner, repo string) {
+	// Handle SSH: git@github.com:owner/repo.git
+	if strings.HasPrefix(remote, "git@") {
+		parts := strings.SplitN(remote, ":", 2)
+		if len(parts) == 2 {
+			path := strings.TrimSuffix(parts[1], ".git")
+			segments := strings.SplitN(path, "/", 2)
+			if len(segments) == 2 {
+				return segments[0], segments[1]
+			}
+		}
+		return "", ""
+	}
+
+	// Handle HTTPS: https://github.com/owner/repo.git
+	remote = strings.TrimSuffix(remote, ".git")
+	parts := strings.Split(remote, "/")
+	if len(parts) >= 2 {
+		return parts[len(parts)-2], parts[len(parts)-1]
+	}
+	return "", ""
+}
+
+func collectProjectVars(pluginIDs []string, vars map[string]string) map[string]string {
+	reader := bufio.NewReader(os.Stdin)
+
+	needsGH := false
+	needsEngram := false
+	needsFigma := false
+	needsStitch := false
+	needsN8n := false
+
+	for _, pid := range pluginIDs {
+		switch pid {
+		case "sdd-wizards", "atl-inteliside", "sdd-intake", "sdd-legacy":
+			needsGH = true
+		case "ux-studio":
+			needsFigma = true
+			needsStitch = true
+		case "n8n-studio":
+			needsN8n = true
+		}
+		if pid == "atl-inteliside" || pid == "sdd-intake" || pid == "sdd-legacy" || pid == "n8n-studio" {
+			needsEngram = true
+		}
+	}
+
+	fmt.Println("  Configuracion del proyecto (Enter para usar el valor detectado):")
+	fmt.Println("  " + strings.Repeat("─", 50))
+
+	vars["project_name"] = promptVar(reader, "  Nombre del proyecto", vars["project_name"])
+
+	if needsGH {
+		vars["github_owner"] = promptVar(reader, "  GitHub owner (org/usuario)", vars["github_owner"])
+		vars["github_repo"] = promptVar(reader, "  GitHub repo", vars["github_repo"])
+	}
+
+	if needsEngram {
+		def := vars["engram_project"]
+		if def == "" {
+			def = vars["project_name"] + "-dev"
+		}
+		vars["engram_project"] = promptVar(reader, "  Proyecto Engram", def)
+	}
+
+	if needsFigma {
+		vars["figma_file"] = promptVar(reader, "  URL del archivo Figma", vars["figma_file"])
+	}
+
+	if needsStitch {
+		vars["gcp_project"] = promptVar(reader, "  Google Cloud Project ID (para Stitch)", vars["gcp_project"])
+		vars["stitch_api_key"] = promptVar(reader, "  Stitch API Key (Enter si ya esta en global)", vars["stitch_api_key"])
+	}
+
+	if needsN8n {
+		def := vars["n8n_dev_url"]
+		if def == "" {
+			def = "https://n8n-dev1.codetrain.cloud"
+		}
+		vars["n8n_dev_url"] = promptVar(reader, "  n8n dev URL", def)
+		vars["n8n_prod_url"] = promptVar(reader, "  n8n prod URL", vars["n8n_prod_url"])
+	}
+
+	fmt.Println()
+	return vars
+}
+
+func promptVar(reader *bufio.Reader, label, defaultVal string) string {
+	if defaultVal != "" {
+		fmt.Printf("%s [%s]: ", label, defaultVal)
+	} else {
+		fmt.Printf("%s: ", label)
+	}
+	input, _ := reader.ReadString('\n')
+	input = strings.TrimSpace(input)
+	if input == "" {
+		return defaultVal
+	}
+	return input
+}
+
+// --- Plugin resolution ---
 
 func resolveInitPlugins(presetFlag, pluginFlag string) ([]string, error) {
 	if presetFlag != "" && pluginFlag != "" {
@@ -326,78 +581,6 @@ func resolveInitPlugins(presetFlag, pluginFlag string) ([]string, error) {
 	return nil, fmt.Errorf("especifica --preset o --plugin")
 }
 
-func collectProjectVars(pluginIDs []string) map[string]string {
-	vars := make(map[string]string)
-	reader := bufio.NewReader(os.Stdin)
-
-	needsGH := false
-	needsEngram := false
-	needsFigma := false
-	needsStitch := false
-	needsN8n := false
-
-	for _, pid := range pluginIDs {
-		switch pid {
-		case "sdd-wizards", "atl-inteliside", "sdd-intake", "sdd-legacy":
-			needsGH = true
-		case "ux-studio":
-			needsFigma = true
-			needsStitch = true
-		case "n8n-studio":
-			needsN8n = true
-		}
-		if pid == "atl-inteliside" || pid == "sdd-intake" || pid == "sdd-legacy" || pid == "n8n-studio" {
-			needsEngram = true
-		}
-	}
-
-	fmt.Println("  Configuración del proyecto (Enter para default):")
-	fmt.Println("  " + strings.Repeat("─", 50))
-
-	vars["project_name"] = promptVar(reader, "  Nombre del proyecto", "mi-proyecto")
-
-	if needsGH {
-		vars["github_owner"] = promptVar(reader, "  GitHub owner (org/usuario)", "")
-		vars["github_repo"] = promptVar(reader, "  GitHub repo", "")
-	}
-
-	if needsEngram {
-		def := vars["project_name"] + "-dev"
-		vars["engram_project"] = promptVar(reader, "  Proyecto Engram", def)
-	}
-
-	if needsFigma {
-		vars["figma_file"] = promptVar(reader, "  URL del archivo Figma", "")
-	}
-
-	if needsStitch {
-		vars["gcp_project"] = promptVar(reader, "  Google Cloud Project ID (para Stitch)", "")
-		vars["stitch_api_key"] = promptVar(reader, "  Stitch API Key (Enter si ya está en global)", "")
-	}
-
-	if needsN8n {
-		vars["n8n_dev_url"] = promptVar(reader, "  n8n dev URL", "https://n8n-dev1.codetrain.cloud")
-		vars["n8n_prod_url"] = promptVar(reader, "  n8n prod URL", "")
-	}
-
-	fmt.Println()
-	return vars
-}
-
-func promptVar(reader *bufio.Reader, label, defaultVal string) string {
-	if defaultVal != "" {
-		fmt.Printf("%s [%s]: ", label, defaultVal)
-	} else {
-		fmt.Printf("%s: ", label)
-	}
-	input, _ := reader.ReadString('\n')
-	input = strings.TrimSpace(input)
-	if input == "" {
-		return defaultVal
-	}
-	return input
-}
-
 func deduplicateRootCLAUDE(targets []templateTarget) []templateTarget {
 	// If both ATL and n8n want root CLAUDE.md, prefer ATL (more complete)
 	hasATL := false
@@ -412,8 +595,6 @@ func deduplicateRootCLAUDE(targets []templateTarget) []templateTarget {
 	}
 
 	if hasATL && hasN8n {
-		// Remove n8n's root CLAUDE.md, ATL's is more complete
-		// n8n config will be appended to ATL's template
 		var filtered []templateTarget
 		for _, t := range targets {
 			if t.pluginID == "n8n-studio" && t.relPath == "CLAUDE.md" {
@@ -426,135 +607,40 @@ func deduplicateRootCLAUDE(targets []templateTarget) []templateTarget {
 	return targets
 }
 
-func getRuleFilesForInit() map[string]string {
-	return map[string]string{
-		"atl-workflow.md": `# ATL Workflow
-
-Este proyecto usa ATL Inteliside para ejecución de features.
-El flujo es: from-github → init → explore → propose → spec+design → tasks → write-tests → apply → verify → archive.
-
-Reglas:
-- Nunca saltarse fases del pipeline
-- Cada fase produce artefactos que la siguiente consume
-- El orquestador coordina todo el flujo
-`,
-		"engram-protocol.md": `# Engram Protocol
-
-Memoria persistente compartida entre agentes.
-
-Reglas:
-- Guardar decisiones de arquitectura en Engram inmediatamente
-- Buscar contexto en Engram antes de proponer cambios
-- Dos proyectos: equipo (permanente) y pipeline (efímero)
-`,
-		"subagent-architecture.md": `# Subagent Architecture
-
-Cada subagente opera en aislamiento (context: fork).
-
-Reglas:
-- Analyst y Architect son read-only (no modifican código)
-- Test Writer genera tests SIN ver implementación
-- Builder es el único que modifica código fuente
-- Verifier es read-only y cierra issues/milestones
-`,
-		"context-monitoring.md": `# Context Monitoring
-
-Gestión del tamaño de contexto durante el pipeline.
-
-Reglas:
-- Monitorear uso de contexto entre fases
-- Si el contexto supera 70%, resumir y continuar en nuevo fork
-- Artefactos grandes van a archivos, no inline
-`,
-		"team-rules.md": `# Team Rules
-
-Reglas de colaboración entre agentes del equipo ATL.
-
-Reglas:
-- El orquestador es la única fuente de verdad del estado
-- Los subagentes no se comunican entre sí directamente
-- La comunicación es via artefactos (archivos) y Engram
-`,
-	}
-}
-
-// --- Templates ---
+// --- Templates (Solution 5: ATL uses embedded source of truth) ---
 
 func templateATL(vars map[string]string) string {
-	name := getVar(vars, "project_name", "[Nombre del Proyecto]")
-	engram := getVar(vars, "engram_project", "[nombre-proyecto]-dev")
-	owner := getVar(vars, "github_owner", "[tu-org-o-usuario]")
-	repo := getVar(vars, "github_repo", "[nombre-repo]")
+	tmpl := embedded.ATLTemplate()
+	if tmpl == "" {
+		// Fallback if embed fails
+		return templateATLFallback(vars)
+	}
+	return embedded.RenderTemplate(tmpl, vars)
+}
+
+func templateATLFallback(vars map[string]string) string {
+	name := getVar(vars, "project_name", "Mi Proyecto")
+	engram := getVar(vars, "engram_project", "mi-proyecto-dev")
+	owner := getVar(vars, "github_owner", "mi-org")
+	repo := getVar(vars, "github_repo", "mi-repo")
 
 	return fmt.Sprintf(`# CLAUDE.md — %s
 
-> Configuración del proyecto para Claude Code y ATL Inteliside.
-> Completa los valores entre corchetes.
-
----
-
+<!-- inteliside:atl-config -->
 ## ATL Inteliside
-
-Configuración requerida para el plugin ATL Inteliside. Todos los devs del equipo deben
-tener este archivo con los mismos valores para compartir la memoria de Engram.
 
 `+"`"+`yaml
 engram_project: "%s"
 github_owner: "%s"
 github_repo: "%s"
 `+"`"+`
-
-> **Nota**: ATL Inteliside deriva automáticamente un segundo proyecto Engram para el pipeline:
-> engram_pipeline = "{engram_project}/atl"
->
-> - **engram_project** → conocimiento permanente del equipo (decisiones, patrones, bugs)
-> - **engram_pipeline** → estado efímero del pipeline de implementación
+<!-- /inteliside:atl-config -->
 
 ---
 
 ## Proyecto
 
 - **Nombre**: %s
-- **Descripción**: [Qué hace el proyecto]
-- **Stack**: [ej: Next.js 15 + TypeScript + Drizzle + PostgreSQL]
-- **Entorno de desarrollo**: [ej: Node 20+, pnpm, Docker para DB]
-
----
-
-## Comandos frecuentes
-
-`+"`"+`bash
-# Desarrollo
-pnpm dev
-
-# Tests
-pnpm test
-
-# Build
-pnpm build
-`+"`"+`
-
----
-
-## Convenciones del proyecto
-
-### Naming
-- Archivos: kebab-case.ts
-- Componentes: PascalCase.tsx
-- Funciones: camelCase
-
-### Testing
-- Archivos de test: *.test.ts junto al archivo testeado
-
----
-
-## Rules de ATL Inteliside
-
-- @.claude/rules/engram-protocol.md
-- @.claude/rules/subagent-architecture.md
-- @.claude/rules/atl-workflow.md
-- @.claude/rules/context-monitoring.md
-- @.claude/rules/team-rules.md
 
 ---
 
@@ -562,15 +648,37 @@ pnpm build
 `, name, engram, owner, repo, name)
 }
 
-func templatePM(vars map[string]string) string {
-	owner := getVar(vars, "github_owner", "{org-o-usuario}")
-	repo := getVar(vars, "github_repo", "{nombre-repo}")
-	name := getVar(vars, "project_name", "{nombre}")
+func templateLegacy(vars map[string]string) string {
+	tmpl := embedded.LegacyTemplate()
+	if tmpl == "" {
+		name := getVar(vars, "project_name", "Mi Proyecto")
+		return fmt.Sprintf("# Contexto Legacy — %s\n\nArtefactos archivados del onboarding legacy.\n", name)
+	}
+	return embedded.RenderTemplate(tmpl, vars)
+}
 
-	return fmt.Sprintf(`# CLAUDE.md — Documentación y Requerimientos
+func templatePM(vars map[string]string) string {
+	owner := getVar(vars, "github_owner", "")
+	repo := getVar(vars, "github_repo", "")
+	name := getVar(vars, "project_name", "")
+
+	ownerDisplay := owner
+	if ownerDisplay == "" {
+		ownerDisplay = "<!-- TODO: github_owner -->"
+	}
+	repoDisplay := repo
+	if repoDisplay == "" {
+		repoDisplay = "<!-- TODO: github_repo -->"
+	}
+	nameDisplay := name
+	if nameDisplay == "" {
+		nameDisplay = "<!-- TODO: project_name -->"
+	}
+
+	return fmt.Sprintf(`# CLAUDE.md — Documentacion y Requerimientos
 
 > Este directorio es el espacio de trabajo del PM.
-> Ejecutar Claude Code desde aquí para usar SDD-Wizards.
+> Ejecutar Claude Code desde aqui para usar SDD-Wizards.
 
 ## Rol
 
@@ -585,19 +693,19 @@ github_owner: "%s"
 github_repo: "%s"
 `+"`"+`
 
-## Reglas de sesión
+## Reglas de sesion
 
-- Una conversación por skill — no mezclar PRD y Feature Spec
-- Una conversación por feature — cada feature se detalla por separado
+- Una conversacion por skill — no mezclar PRD y Feature Spec
+- Una conversacion por feature — cada feature se detalla por separado
 - Descargar el output antes de cerrar — el archivo .md es la memoria entre sesiones
 
 ## Contexto del producto
 
 - **Producto**: %s
-- **Empresa / Cliente**: [nombre]
-- **Problema que resuelve**: [descripción breve]
-- **Usuarios objetivo**: [quiénes son]
-- **Restricciones**: [presupuesto, plazo, integraciones obligatorias]
+- **Empresa / Cliente**: <!-- TODO: nombre_empresa -->
+- **Problema que resuelve**: <!-- TODO: problema -->
+- **Usuarios objetivo**: <!-- TODO: usuarios -->
+- **Restricciones**: <!-- TODO: restricciones -->
 
 ## Estructura de este directorio
 
@@ -613,23 +721,32 @@ docs/
 ---
 
 *Generado con inteliside init — Marketplace Inteliside*
-`, owner, repo, name)
+`, ownerDisplay, repoDisplay, nameDisplay)
 }
 
 func templateDesigner(vars map[string]string) string {
-	figma := getVar(vars, "figma_file", "{URL del archivo Figma}")
-	engram := getVar(vars, "engram_project", "{nombre-proyecto}-dev")
+	figma := getVar(vars, "figma_file", "")
+	engram := getVar(vars, "engram_project", "")
 
-	return fmt.Sprintf(`# CLAUDE.md — Diseño UI/UX
+	figmaDisplay := figma
+	if figmaDisplay == "" {
+		figmaDisplay = "<!-- TODO: figma_file -->"
+	}
+	engramDisplay := engram
+	if engramDisplay == "" {
+		engramDisplay = "<!-- TODO: engram_project -->"
+	}
+
+	return fmt.Sprintf(`# CLAUDE.md — Diseno UI/UX
 
 > Este directorio es el espacio de trabajo del Designer.
-> Ejecutar Claude Code desde aquí para usar UX Studio.
+> Ejecutar Claude Code desde aqui para usar UX Studio.
 
 ## Rol
 
 Este CLAUDE.md aplica al Designer. Desde este directorio se:
 - Lanza el pipeline completo con /ux-studio:ux-orchestrator
-- Ejecuta solo la entrevista de diseño con /ux-studio:ux-discovery
+- Ejecuta solo la entrevista de diseno con /ux-studio:ux-discovery
 
 ## Config
 
@@ -646,17 +763,17 @@ research → discovery → prompt-gen → stitch-gen → figma-import → refine
 
 ## MCP Servers requeridos
 
-Verificar que están configurados:
-- **Google Stitch MCP** — generación de diseños UI desde prompts
-- **Figma Console MCP** — importación y refinamiento en Figma
+Verificar que estan configurados:
+- **Google Stitch MCP** — generacion de disenos UI desde prompts
+- **Figma Console MCP** — importacion y refinamiento en Figma
 - **Chrome DevTools MCP** — research de competencia
 
-## Reglas de diseño
+## Reglas de diseno
 
-- WCAG AA mínimo (contraste 4.5:1 texto normal, 3:1 texto grande)
+- WCAG AA minimo (contraste 4.5:1 texto normal, 3:1 texto grande)
 - Escala de spacing basada en 4px
-- Priorizar productos reales de competencia sobre sitios de diseño
-- Componentes con variantes (estados, tamaños)
+- Priorizar productos reales de competencia sobre sitios de diseno
+- Componentes con variantes (estados, tamanos)
 
 ## Engram
 
@@ -682,25 +799,41 @@ docs/ux-ui/
 ---
 
 *Generado con inteliside init — Marketplace Inteliside*
-`, figma, engram)
+`, figmaDisplay, engramDisplay)
 }
 
 func templateN8n(vars map[string]string) string {
-	name := getVar(vars, "project_name", "[Nombre del Proyecto]")
-	engram := getVar(vars, "engram_project", "[nombre-proyecto]-n8n")
-	devURL := getVar(vars, "n8n_dev_url", "[url-de-tu-n8n-dev]")
-	prodURL := getVar(vars, "n8n_prod_url", "[url-de-tu-n8n-prod]")
+	name := getVar(vars, "project_name", "")
+	engram := getVar(vars, "engram_project", "")
+	devURL := getVar(vars, "n8n_dev_url", "")
+	prodURL := getVar(vars, "n8n_prod_url", "")
+
+	nameDisplay := name
+	if nameDisplay == "" {
+		nameDisplay = "<!-- TODO: project_name -->"
+	}
+	engramDisplay := engram
+	if engramDisplay == "" {
+		engramDisplay = "<!-- TODO: engram_project -->"
+	}
+	devDisplay := devURL
+	if devDisplay == "" {
+		devDisplay = "<!-- TODO: n8n_dev_url -->"
+	}
+	prodDisplay := prodURL
+	if prodDisplay == "" {
+		prodDisplay = "<!-- TODO: n8n_prod_url -->"
+	}
 
 	return fmt.Sprintf(`# CLAUDE.md — %s
 
-> Configuración del proyecto para Claude Code y n8n Studio.
-> Completa los valores entre corchetes.
+> Configuracion del proyecto para Claude Code y n8n Studio.
 
 ---
 
 ## n8n Studio
 
-Configuración requerida para el plugin n8n Studio.
+Configuracion requerida para el plugin n8n Studio.
 
 `+"`"+`yaml
 engram_project: "%s"
@@ -715,9 +848,9 @@ n8n_prod_url: "%s"
 ## Flujo de trabajo
 
 `+"`"+`
-1. /n8n-studio:automation-wizard [descripción]  → Genera Automation Spec
+1. /n8n-studio:automation-wizard [descripcion]  → Genera Automation Spec
 2. /n8n-studio:n8n-orchestrator [ruta-spec.md]  → Construye, prueba y despliega
-3. /n8n-studio:n8n-deploy [workflow-id]         → Promueve a producción
+3. /n8n-studio:n8n-deploy [workflow-id]         → Promueve a produccion
 `+"`"+`
 
 ---
@@ -739,7 +872,7 @@ automation-specs/
 ---
 
 *Generado con inteliside init — Marketplace Inteliside*
-`, name, engram, devURL, prodURL)
+`, nameDisplay, engramDisplay, devDisplay, prodDisplay)
 }
 
 func writeProjectStitchMCP(settingsPath, stitchKey, gcpProject string) error {
