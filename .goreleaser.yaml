@@ -5,7 +5,6 @@ project_name: inteliside
 before:
   hooks:
     - go mod tidy
-    - go generate ./...
 
 builds:
   - id: inteliside
@@ -48,20 +47,21 @@ changelog:
       - "^test:"
       - "^chore:"
 
-brews:
-  - name: inteliside
-    repository:
-      owner: Intelliaa
-      name: homebrew-tap
-      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
-    directory: Formula
-    homepage: "https://github.com/Intelliaa/inteliside-cli"
-    description: "CLI del Marketplace de Plugins Inteliside para Claude Code"
-    license: "MIT"
-    install: |
-      bin.install "inteliside"
-    test: |
-      system "#{bin}/inteliside", "version"
+# brews:
+#   - name: inteliside
+#     repository:
+#       owner: Intelliaa
+#       name: homebrew-tap
+#       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+#     directory: Formula
+#     homepage: "https://github.com/Intelliaa/inteliside-cli"
+#     description: "CLI del Marketplace de Plugins Inteliside para Claude Code"
+#     license: "MIT"
+#     install: |
+#       bin.install "inteliside"
+#     test: |
+#       system "#{bin}/inteliside", "version"
+# TODO: Uncomment after creating HOMEBREW_TAP_TOKEN secret
 
 release:
   github:
