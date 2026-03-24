@@ -163,8 +163,9 @@ func runInit(cmd *cobra.Command, args []string) error {
 	// Collect variables — auto-detect first, then prompt if interactive
 	vars := detectProjectVars(projectDir)
 
-	// Merge extracted legacy vars (these take precedence over auto-detected)
-	if legacyArtifacts.IsLegacy {
+	// Merge extracted vars (from legacy or SDD-Legacy generated files)
+	// These take precedence over auto-detected because they come from actual analysis
+	if len(legacyArtifacts.ExtractedVars) > 0 {
 		for k, v := range legacyArtifacts.ExtractedVars {
 			if v != "" {
 				vars[k] = v
