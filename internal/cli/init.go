@@ -71,17 +71,19 @@ Para setup global (MCP servers, Engram), usar 'inteliside install'.
 
 Ejemplos:
   cd mi-proyecto
-  inteliside init --preset dev         # CLAUDE.md raiz + docs/ + rules
   inteliside init --preset legacy      # Archiva legacy + genera ATL
   inteliside init --preset designer    # docs/CLAUDE.md + docs/ux-ui/CLAUDE.md
   inteliside init --preset fullstack   # Todo
   inteliside init --plugin ux-studio   # Solo docs/ux-ui/CLAUDE.md
-  inteliside init --dry-run            # Preview sin cambios`,
+  inteliside init --dry-run            # Preview sin cambios
+
+Nota: El preset 'dev' no esta disponible en init. Los devs ATL deben hacer
+pull de la rama que dejo sdd-legacy con el proyecto ya configurado.`,
 	RunE: runInit,
 }
 
 func init() {
-	initCmd.Flags().String("preset", "", "Preset por rol: pm, designer, dev, fullstack, automation, legacy")
+	initCmd.Flags().String("preset", "", "Preset por rol: pm, designer, fullstack, automation, legacy")
 	initCmd.Flags().String("plugin", "", "Plugins especificos separados por coma")
 	initCmd.Flags().Bool("dry-run", false, "Mostrar plan sin ejecutar")
 	initCmd.Flags().BoolP("yes", "y", false, "No preguntar valores, usar defaults")
@@ -667,6 +669,9 @@ func resolveInitPlugins(presetFlag, pluginFlag string) ([]string, error) {
 		return nil, fmt.Errorf("usa --preset o --plugin, no ambos")
 	}
 	if presetFlag != "" {
+		if presetFlag == "dev" {
+			return nil, fmt.Errorf("el preset 'dev' no esta disponible en init — los devs ATL deben hacer pull de la rama que dejo sdd-legacy")
+		}
 		preset := catalog.PresetByID(presetFlag)
 		if preset == nil {
 			return nil, fmt.Errorf("preset desconocido: %s", presetFlag)
